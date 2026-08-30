@@ -11,12 +11,16 @@ __pycache__/
 # --- vault: local encrypted source-of-truth, never push ---
 vault/
 
-# --- secrets / API keys ---
+# --- keys: encrypted credentials, never push ---
 keys/
+*.enc
 *.key
 *.pem
 .env
 .env.*
+
+# --- shared_driver: Selenium WebDriver artifacts ---
+shared_driver/
 
 # --- persona browser data (cookies, Chrome session) ---
 personas/*/browser_profile/
@@ -42,3 +46,9 @@ engines/auto-job-applier/user_config.json
 engines/linkedin-aihawk/data_folder/secrets.yaml
 engines/linkedin-aihawk/data_folder/resume.pdf
 engines/linkedin-bot/config.json
+
+# --- local test / experiment artifacts ---
+_test_*.py
+_test_*/
+_smoke*.py
+_fix_proc.py

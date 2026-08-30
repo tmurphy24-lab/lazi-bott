@@ -1,64 +1,105 @@
-# linkedin-autopilot
+# Lazi-Bot — Agent Dev Guide
 
-**Unified desktop launcher** for the five existing LinkedIn job bots:
-`EasyApplyJobsBot`, `linkedin-aihawk`, `auto-job-applier`, `linkedin-bot`, and
-`Job-apply-AI-agent`.
+> This file is for AI agents. Humans: see `README.md`.
 
-## What it does
+## Stack
 
-- Presents a PySide6 GUI: pick a **Persona** → pick a **Provider** → pick a **Mode/Engine**.
-- One **browser profile per persona** — you log into LinkedIn once, it persists.
-- One **shared scraper** (`app/scraper.py`) — discovers jobs once, dispatches to the
-  selected engine.
-- **Provider abstraction**: Poolside, OpenAI, Google, or None — injected as env vars.
-- **Run summaries** saved to `runs/` as JSON; **live log panel** during execution.
-- **Plugin hooks**: drop `.py` files in `plugins/` that define `before_scrape`,
-  `on_job`, or `on_error` functions.
+- **Runtime**: Python 3.11+, PySide6 GUI, openai-compatible LLM client
+- **Repo root**: `C:\Users\trevo\Desktop\.agents\linkedin-autopilot`
+- **Engines live here**: `engines/<name>/` (MIT-licensed copies, read-only)
+- **Engine adapters live here**: `app/engines/` (wraps each engine for the dispatcher)
 
-## Layout
+## Engine Registry (Phase 2 — 6 engines)
+
+| # | Name | Adapter | Notes |
+|---|---|---|---|
+| 1 | `easyapplyjobsbot` | `app/engines/easyapplyjobsbot_adapter.py` | Volume, no cover letter |
+| 2 | `linkedin_aihawk` | `app/engines/linkedin_aihawk_adapter.py` | AI-powered, needs Chrome |
+| 3 | `auto_job_applier` | `app/engines/auto_job_applier_adapter.py` | Custom prompts |
+| 4 | `linkedin_bot` | `app/engines/linkedin_bot_adapter.py` | Patch: env `OPENAI_API_BASE_URL` |
+| 5 | `job_apply_ai_agent` | `app/engines/job_apply_ai_agent_adapter.py` | Batch processing |
+| 6 | `page_agent` | `app/mcp_bridge.py` — `MCPBridge` | Alibaba JS bookmarklet, MCP stdio |
+
+## Phase 2 Architecture
 
 ```
-linkedin-autopilot/
-├── app/
-│   ├── main.py                  ← PySide6 GUI scaffold
-│   ├── scraper.py               ← shared LinkedIn job scraper
-│   ├── profile_store.py         ← keyring + Chrome profile management
-│   ├── bot_runner.py            ← dispatcher + plugin loader
-│   └── engines/                 ← 5 thin adapter wrappers
-├── engines/                     ← COPY of the 5 original bots (unmodified except linkedin-bot patches)
-├── personas/                    ← per-persona search_config.yaml + browser_profile/
-├── runs/                        ← run summaries (JSON)
-├── logs/
-├── keys/                        ← API key files (gitignored)
-└── plugins/                     ← optional hook plugins
+LaziBrain (QObject)
+├── LaziBrainCore (enhanced ReAct loop)
+│   ├── observe → think → reflect → act → loop (max 10 iterations)
+│   ├── event bus: status_changed / history_changed / activity_changed (Qt signals)
+│   └── _AbortController for cancellation
+├── MCPBridge (stub mode default)
+│   ├── MCPServer: hosts tools for page-agent to call
+│   └── page-agent: JS-injected browser agent, communicates via MCP over stdio
+└── ToolRegistry (@register_tool decorator, 6 engines + built-in helpers)
 ```
 
-## Two patched files (in engines/linkedin-bot/)
+## Key Files
 
-1. **`utils/ai.py`** — reads `OPENAI_API_BASE_URL` from env so Poolside/Google work.
-2. **`easy_apply.py`** — accepts `--jobs` and `--salary` CLI args to bypass the tkinter
-   input popup (the only change that lets the dispatcher control the search query).
+| File | Purpose |
+|---|---|
+| `app/lazibrain_core.py` | Enhanced ReAct loop + Qt event bus |
+| `app/mcp_bridge.py` | MCP server (stdio) + MCPBridge client |
+| `app/tool_decorator.py` | `@register_tool`, `Tool`, `get_tool_registry()` |
+| `app/lazibot.py` | `LaziBrain` (delegates to core), `LaziDock`, `TheCouch` |
+| `app/lazi_integration.py` | Boot sequence: vault + self-healer + MCP bridge |
+| `app/scraper.py` | Shared job discovery (LinkedIn, Indeed, RemoteOK, Glassdoor) |
+| `app/bot_runner.py` | Engine dispatcher + plugin hooks |
+| `app/vault.py` | Encrypted local memory |
+| `app/self_healer.py` | LLM-powered self-diagnosis + fix broadcasting |
 
-## Setup
+## Tool Registration
 
-```powershell
-cd linkedin-autopilot
-run.bat
+Tools are registered at import time via `@register_tool`:
+
+```python
+from app.tool_decorator import register_tool
+
+@register_tool(
+    name="my_engine",
+    description="What it does",
+    input_schema={"type": "object", "properties": {...}},
+)
+def my_engine(query: str, location: str, max_jobs: int = 50, signal=None):
+    signal.raise_if_aborted()  # check at checkpoints
+    return {"content": [{"type": "text", "text": "result"}]}
 ```
 
-On first run it creates a `venv`, installs deps, and launches the GUI.
+## Hard Rules
 
-## Non-goals
+1. **NO worktrees** — work on main checkout only
+2. **Squash merge** when > 3 commits — conventional commits: `feat(svc):`, `fix(svc):`, `refactor(svc):`
+3. **Original bots in `C:\Users\trevo\Desktop\.agents/` are untouched** — all copies live in `engines/`
+4. **Delete via `recycle.ps1`** — no `Remove-Item`; the Recycle Bin guard is intentional
 
-- Does **not** modify the original bots in `C:\Users\trevo\Desktop\.agents\`.
-- Does **not** fix `pygame` build failures (cosmetic sound effects in linkedin-bot).
-- Does **not** rename `Job-apply-AI-agent` (venv hardcodes the absolute path).
+## Boot Sequence
 
-## Known limitations
+```
+AppController.__init__
+  └─ setup_lazi_integration(controller)
+       ├─ _boot_mcp_bridge()     → MCPBridge (synchronous, fast)
+       └─ _background_boot()     → Vault + SelfHealer + HiveMindFixBroadcaster (async)
+```
 
-- **Google SSO intent is unresolved** — see plan Decision 5. Currently "google" provider
-  passes through Chrome session only; true OAuth client not implemented.
-- **Screen recording** — plan Option C (DOM event logging) chosen over video.
-  The `bot_runner.py` does not yet implement the DOM logger; it logs engine stdout only.
-- **Credential encryption** — `keyring` for API keys; Chrome profile dir is unencrypted
-  on disk (standard Chrome behavior).
+After boot, call `lazi_integration.get_vault()` and `lazi_integration.get_mcp_bridge()`
+from anywhere to access singletons.
+
+## Provider Config
+
+| Provider | Env var |
+|---|---|
+| Poolside | `POOLSIDE_API_KEY` |
+| OpenAI | `OPENAI_API_KEY` |
+| Google | `GOOGLE_API_KEY` |
+| None | form-only mode, no key needed |
+
+## Google SSO
+
+Google OAuth client **not yet implemented** — see `PLAN.md` Decision 5. Currently
+falls through to Chrome session cookie only.
+
+## Dependabot
+
+Vulnerabilities in vendored engine submodules are tracked by `.github/dependabot.yml`
+(weekly schedule). Fix by running `npm audit fix` or `pip-audit` in the relevant
+`engines/<name>/` directory and committing the lockfile updates.

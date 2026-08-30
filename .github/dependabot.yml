@@ -1,0 +1,65 @@
+version: 2
+updates:
+  # Keep pip dependencies in sync across all requirements files
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: sunday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - pip
+
+  # Keep pip deps in engine submodules
+  - package-ecosystem: pip
+    directory: /engines/EasyApplyJobsBot
+    schedule:
+      interval: weekly
+      day: sunday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - engine
+
+  - package-ecosystem: pip
+    directory: /engines/auto-job-applier
+    schedule:
+      interval: weekly
+      day: sunday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - engine
+
+  - package-ecosystem: pip
+    directory: /engines/linkedin-aihawk
+    schedule:
+      interval: weekly
+      day: sunday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - engine
+
+  - package-ecosystem: pip
+    directory: /engines/Job-apply-AI-agent
+    schedule:
+      interval: weekly
+      day: sunday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - engine
+
+  # Keep package.json deps in linkedin-bot (has npm packages)
+  - package-ecosystem: npm
+    directory: /engines/linkedin-bot
+    schedule:
+      interval: weekly
+      day: sunday
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - engine
+      - npm
