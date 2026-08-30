@@ -108,10 +108,12 @@ PERSONAS_DIR.mkdir(parents=True, exist_ok=True)
 
 from PySide6.QtWidgets import QApplication
 app = QApplication.instance() or QApplication(sys.argv)
-from app.main import PersonaPicker
-from app.lazibot import TheCouch
+from app.main import PersonaPicker, AppController
+from app.lazibot import TheCouch, LaziBrain
 
-win = PersonaPicker()
+controller = AppController(app)
+brain = LaziBrain()
+win = PersonaPicker(controller, brain)
 check("PersonaPicker has empty persona list on first run",
       win.list_widget.count() == 0,
       f"got {win.list_widget.count()} personas")

@@ -55,8 +55,8 @@ check("auto-job-applier adapter parses stdout for counters",
 
 print("\nAC8: RunView.start() called + Qt thread-safety")
 main_text = Path("app/main.py").read_text(encoding="utf-8")
-check("RunView.start() is called from RunConfig._start",
-      "self._run_window.start()" in main_text,
+check("RunView.start() is called from RunConfig",
+      "rv.start()" in main_text or "self._run_window.start()" in main_text,
       "missing call to .start() on the run window")
 check("_LogBridge uses Signal/Slot for thread safety",
       "_LogBridge" in main_text and "Signal" in main_text and "_log_bridge.line.connect" in main_text,

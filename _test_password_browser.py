@@ -107,8 +107,11 @@ check("TheCouch has PasswordVaultWidget on tab 9", c.passwords is not None)
 # === PersonaPicker still works with new 11-tab Couch ===
 
 print("\nAC20: PersonaPicker builds with 11-tab Couch")
-from app.main import PersonaPicker
-p = PersonaPicker()
+from app.main import PersonaPicker, AppController
+from app.lazibot import LaziBrain
+controller = AppController(app)
+brain = LaziBrain()
+p = PersonaPicker(controller, brain)
 check("PersonaPicker has 11-tab Couch",
       p.couch.tabs.count() == 11,
       f"got {p.couch.tabs.count()}")

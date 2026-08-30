@@ -1,7 +1,7 @@
 titles:
-- Engineer
+- Test
 location: United States
-salary_min: 0
+salary_min: 175000
 salary_max: 0
 experience_years_min: 0
 experience_years_max: 0
@@ -9,6 +9,9 @@ experience_levels: []
 job_types:
 - Full-time
 date_posted: Past Week
+remote: true
+hybrid: true
+onsite: true
 blacklist_companies: []
 blacklist_titles: []
 apply_once_at_company: true
