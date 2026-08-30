@@ -8,6 +8,9 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
+# --- vault: local encrypted source-of-truth, never push ---
+vault/
+
 # --- secrets / API keys ---
 keys/
 *.key
