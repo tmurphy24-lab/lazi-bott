@@ -20,11 +20,16 @@ This is the "read from profile / read from resume" behavior the user asked for.
 It runs in two places:
   1. As a bot_runner `on_job` plugin (filters/ranks jobs before apply)
   2. As a filler callable the engines can use to answer form questions
-     (future: wire to AIHawk/auto-job-applier form-answer hooks).
+
+When the heuristic answer is None (the resume/profile doesn't have it), the
+filler can fall back to the LLM (Poolside/OpenAI) with a system prompt that
+includes the persona's full profile context.
 """
 
 from __future__ import annotations
+import json
 import logging
+import os
 import re
 from typing import Dict, Any, List, Optional, Callable
 
@@ -185,3 +190,105 @@ def make_on_job_filter(persona: Persona) -> Callable[[dict], bool]:
             return False
         return True
     return _filter
+
+
+# -- LLM-backed answerer (used when heuristic is None) --
+
+def _build_llm_system_prompt(profile: Dict[str, Any]) -> str:
+    """Build a system prompt that includes the persona's profile so the LLM
+    can answer form questions in-character."""
+    pi = profile.get("personal_info", {}) or {}
+    lines = [
+        "You are filling out a job application form on behalf of the user.",
+        "Use ONLY the information in the user profile below. If a field is",
+        "missing, say 'unknown' rather than making something up. Reply with",
+        "ONLY the answer text — no preamble, no explanation, no quotes.",
+        "",
+        "USER PROFILE:",
+        f"Name: {pi.get('first_name','')} {pi.get('last_name','')}".strip(),
+        f"Email: {pi.get('email','')}",
+        f"Phone: {pi.get('phone','')}",
+        f"Location: {pi.get('city','')}, {pi.get('state','')} {pi.get('country','')}".strip(),
+        f"LinkedIn: {pi.get('linkedin_url','')}",
+        f"Skills: {', '.join(profile.get('skills', []) or [])}",
+    ]
+    if profile.get("experience"):
+        lines.append("Experience:")
+        for e in profile["experience"][:5]:
+            lines.append(f"  - {e.get('title','')} ({e.get('start','')} to {e.get('end','')})")
+    if profile.get("education"):
+        lines.append("Education:")
+        for ed in profile["education"][:3]:
+            lines.append(f"  - {ed.get('degree','')} {ed.get('school','')} ({ed.get('year','')})")
+    return "\n".join(lines)
+
+
+def llm_answer_question(question: str, profile: Dict[str, Any],
+                         provider: str = "poolside",
+                         api_key: Optional[str] = None) -> Optional[str]:
+    """
+    Ask the LLM to answer a single form question using the persona's profile.
+    Returns None if the LLM call fails or no key is configured.
+    """
+    if not api_key:
+        return None
+    try:
+        import openai
+    except ImportError:
+        return None
+    base_urls = {
+        "poolside": "https://inference.poolside.ai/v1",
+        "openai":   "https://api.openai.com/v1",
+    }
+    base = base_urls.get(provider, "https://api.openai.com/v1")
+    try:
+        client = openai.OpenAI(api_key=api_key, base_url=base)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": _build_llm_system_prompt(profile)},
+                {"role": "user",   "content": question},
+            ],
+            max_tokens=120,
+        )
+        text = (resp.choices[0].message.content or "").strip()
+        if text.lower() in ("unknown", "n/a", "not applicable", ""):
+            return None
+        return text
+    except Exception as e:
+        logger.warning("LLM answer failed for %r: %s", question[:40], e)
+        return None
+
+
+def build_llm_answerer(persona: Persona, provider: str = "poolside") -> Callable[[str], Optional[str]]:
+    """
+    Returns a closure that first tries the heuristic answer, then falls back
+    to the LLM. Used as the engine's form-question filler.
+    """
+    from .profile_store import resolve_api_key
+    profile = persona.load_profile()
+    cfg = persona.load_config()
+    profile["_search_config"] = cfg
+    api_key = resolve_api_key(provider) if provider != "none" else None
+
+    def _answer(question: str) -> Optional[str]:
+        local = answer_question(question, profile)
+        if local is not None:
+            return local
+        return llm_answer_question(question, profile, provider=provider, api_key=api_key)
+    return _answer
+
+
+def answer_form_with_llm(questions: List[str], persona: Persona,
+                          provider: str = "poolside") -> Dict[str, str]:
+    """
+    Like answer_form, but for any question the heuristic can't answer,
+    the LLM is consulted.
+    """
+    answerer = build_llm_answerer(persona, provider=provider)
+    out: Dict[str, str] = {}
+    for i, q in enumerate(questions):
+        a = answerer(q)
+        if a:
+            out[str(i)] = a
+    return out

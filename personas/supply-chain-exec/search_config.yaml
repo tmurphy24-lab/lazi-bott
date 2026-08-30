@@ -10,7 +10,10 @@ titles:
 - Head of Planning
 - Director of Planning
 location: United States
-salary_min: 120000
+salary_min: 150000
+salary_max: 300000
+experience_years_min: 5
+experience_years_max: 20
 experience_levels:
 - Mid-Senior level
 - Director
@@ -18,6 +21,9 @@ job_types:
 - Full-time
 - Part-time
 date_posted: Past Week
+remote: true
+hybrid: true
+onsite: true
 blacklist_companies:
 - Crossover
 - Jobot
@@ -52,3 +58,4 @@ blacklist_titles:
 - Nurse
 - Teacher
 apply_once_at_company: true
+max_applications: 50

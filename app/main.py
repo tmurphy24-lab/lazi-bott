@@ -534,8 +534,8 @@ class SearchableParameterEditor(QWidget):
     def _filter(self, q: str):
         q = q.strip().lower()
         for i in range(self.form_layout.rowCount()):
-            label_item = self.form_layout.itemAt(i, QFormLayout.LabelRole)
-            field_item = self.form_layout.itemAt(i, QFormLayout.FieldRole)
+            label_item = self.form_layout.itemAt(i, QFormLayout.ItemRole.LabelRole)
+            field_item = self.form_layout.itemAt(i, QFormLayout.ItemRole.FieldRole)
             if not label_item or not field_item:
                 continue
             label_text = ""
