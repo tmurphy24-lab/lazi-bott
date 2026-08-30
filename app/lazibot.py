@@ -31,7 +31,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit, QLineEdit,
     QDialog, QListWidget, QListWidgetItem, QFrame, QSizePolicy, QComboBox,
     QTabWidget, QFormLayout, QMessageBox, QInputDialog, QGraphicsDropShadowEffect,
-    QStackedWidget, QScrollArea, QProgressBar, QApplication, QCheckBox
+    QStackedWidget, QScrollArea, QProgressBar, QApplication, QCheckBox,
+    QTableWidget, QTableWidgetItem, QFileDialog, QGroupBox
 )
 
 logger = logging.getLogger(__name__)
@@ -693,6 +694,321 @@ class WalkthroughsPage(QWidget):
         layout.addWidget(scroll, stretch=1)
 
 
+# === New feature tabs (Job Tracker, Analytics, Scheduler, AI Assist) ===
+
+from .job_tracker import (
+    record_application, list_applications, update_status, delete_application,
+    export_csv, Application,
+)
+from .analytics import compute_stats, by_engine, by_week, by_company, Stats
+from .scheduler import (
+    add_schedule, list_schedules, remove_schedule, set_enabled,
+    parse_cron, is_due, next_run, Schedule,
+)
+from .ai_assist import (
+    generate_cover_letter, generate_interview_questions,
+    generate_followup_email, salary_benchmark, tailor_resume,
+)
+from .ux import ThemeManager, Notifier, THEMES
+
+
+class JobTrackerPage(QWidget):
+    """List every job applied to with status, filter, export to CSV."""
+
+    def __init__(self, parent: Optional[QWidget] = None, persona_name: Optional[str] = None):
+        super().__init__(parent)
+        self.persona_name = persona_name or ""
+        layout = QVBoxLayout(self)
+
+        # Toolbar
+        bar = QHBoxLayout()
+        self.filter_edit = QLineEdit()
+        self.filter_edit.setPlaceholderText("Filter by title or company…")
+        bar.addWidget(self.filter_edit)
+        refresh = QPushButton("↻ Refresh")
+        refresh.clicked.connect(self._refresh)
+        bar.addWidget(refresh)
+        export_btn = QPushButton("⬇ Export CSV")
+        export_btn.clicked.connect(self._export)
+        bar.addWidget(export_btn)
+        layout.addLayout(bar)
+
+        # Table
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Title", "Company", "Status", "Applied", "Engine"])
+        layout.addWidget(self.table, stretch=1)
+        self._refresh()
+
+    def _refresh(self):
+        apps = list_applications(persona=self.persona_name or None)
+        f = self.filter_edit.text().strip().lower() if hasattr(self, "filter_edit") else ""
+        if f:
+            apps = [a for a in apps if f in a.title.lower() or f in a.company.lower()]
+        self.table.setRowCount(len(apps))
+        for row, a in enumerate(apps):
+            self.table.setItem(row, 0, QTableWidgetItem(a.title))
+            self.table.setItem(row, 1, QTableWidgetItem(a.company))
+            self.table.setItem(row, 2, QTableWidgetItem(a.status))
+            self.table.setItem(row, 3, QTableWidgetItem(a.applied_at[:10]))
+            self.table.setItem(row, 4, QTableWidgetItem(a.engine))
+
+    def _export(self):
+        csv_text = export_csv(persona=self.persona_name or None)
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export applications to CSV", "applications.csv",
+            "CSV files (*.csv)"
+        )
+        if path:
+            Path(path).write_text(csv_text, encoding="utf-8")
+            QMessageBox.information(self, "Export", f"Saved {len(csv_text.splitlines()) - 1} rows to {path}")
+
+
+class AnalyticsPage(QWidget):
+    """Dashboard of applied/rejected/response-rate by week, engine, company."""
+
+    def __init__(self, parent: Optional[QWidget] = None, persona_name: Optional[str] = None):
+        super().__init__(parent)
+        self.persona_name = persona_name or None
+        layout = QVBoxLayout(self)
+        self.stats_label = QLabel("")
+        self.stats_label.setStyleSheet("font-size: 14px; padding: 8px;")
+        layout.addWidget(self.stats_label)
+        self.detail = QTextEdit()
+        self.detail.setReadOnly(True)
+        layout.addWidget(self.detail, stretch=1)
+        self._refresh()
+        QTimer.singleShot(0, self._refresh)
+
+    def _refresh(self):
+        s = compute_stats(persona=self.persona_name)
+        self.stats_label.setText(
+            f"<b>Total: {s.total}</b> &nbsp;|&nbsp; "
+            f"Applied: {s.applied} &nbsp;|&nbsp; "
+            f"Interviews: {s.interview} &nbsp;|&nbsp; "
+            f"Offers: {s.offer} &nbsp;|&nbsp; "
+            f"Response rate: {s.response_rate*100:.1f}% &nbsp;|&nbsp; "
+            f"Offer rate: {s.offer_rate*100:.1f}%"
+        )
+        out = []
+        out.append("=== By engine ===")
+        for k, v in s.by_engine.items():
+            out.append(f"  {k}: {v}")
+        out.append("\n=== By week (most recent 10) ===")
+        for k, v in list(s.by_week.items())[-10:]:
+            out.append(f"  {k}: {v}")
+        out.append("\n=== Top companies ===")
+        for k, v in s.top_companies.items():
+            out.append(f"  {k}: {v}")
+        self.detail.setPlainText("\n".join(out))
+
+
+class SchedulerPage(QWidget):
+    """Cron-style schedule manager. Add/remove schedules, see next run."""
+
+    def __init__(self, parent: Optional[QWidget] = None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+
+        # Add form
+        form = QFormLayout()
+        self.name_edit = QLineEdit()
+        self.persona_edit = QLineEdit()
+        self.engine_combo = QComboBox()
+        self.engine_combo.addItems(["easyapplyjobsbot","linkedin-aihawk",
+                                     "auto-job-applier","linkedin-bot","job-apply-ai-agent"])
+        self.cron_edit = QLineEdit("0 9 * * 1-5")  # 9am Mon-Fri
+        self.cron_edit.setToolTip("Cron: minute hour day-of-month month day-of-week")
+        form.addRow("Name:", self.name_edit)
+        form.addRow("Persona:", self.persona_edit)
+        form.addRow("Engine:", self.engine_combo)
+        form.addRow("Cron expr:", self.cron_edit)
+        layout.addLayout(form)
+
+        add_btn = QPushButton("+ Add schedule")
+        add_btn.clicked.connect(self._add)
+        layout.addWidget(add_btn)
+
+        self.list_widget = QListWidget()
+        layout.addWidget(self.list_widget, stretch=1)
+        self._refresh()
+
+    def _add(self):
+        name = self.name_edit.text().strip()
+        persona = self.persona_edit.text().strip()
+        if not name or not persona:
+            QMessageBox.warning(self, "Schedule", "Name and persona are required.")
+            return
+        add_schedule(
+            name=name,
+            persona=persona,
+            engine=self.engine_combo.currentText(),
+            provider="poolside",
+            mode="auto-apply",
+            cron_expr=self.cron_edit.text().strip(),
+        )
+        self._refresh()
+
+    def _refresh(self):
+        self.list_widget.clear()
+        for s in list_schedules():
+            nxt = next_run(s)
+            nxt_str = nxt.isoformat() if nxt else "n/a"
+            item = QListWidgetItem(
+                f"{'[ON]' if s.enabled else '[OFF]'} {s.name} — {s.engine} @ {s.persona} | {s.cron_expr} | next: {nxt_str}"
+            )
+            item.setData(Qt.UserRole, s.name)
+            self.list_widget.addItem(item)
+
+    def contextMenuEvent(self, event):
+        item = self.list_widget.itemAt(event.pos())
+        if not item:
+            return
+        name = item.data(Qt.UserRole)
+        from PySide6.QtWidgets import QMenu
+        m = QMenu(self)
+        m.addAction("Toggle enabled", lambda: self._toggle(name))
+        m.addAction("Delete", lambda: self._delete(name))
+        m.exec(event.globalPos())
+
+    def _toggle(self, name):
+        for s in list_schedules():
+            if s.name == name:
+                set_enabled(name, not s.enabled)
+                break
+        self._refresh()
+
+    def _delete(self, name):
+        remove_schedule(name)
+        self._refresh()
+
+
+class AIAssistPage(QWidget):
+    """F4-F8: Cover letter, interview prep, follow-up email, salary benchmark, resume tailor."""
+
+    def __init__(self, parent: Optional[QWidget] = None, persona: Optional[Persona] = None):
+        super().__init__(parent)
+        self.persona = persona
+        layout = QVBoxLayout(self)
+        if persona is None:
+            w = QLabel("Select a persona first to use AI Assist.")
+            w.setStyleSheet("color: #888; font-style: italic; padding: 16px;")
+            layout.addWidget(w)
+            return
+
+        # Job description input (shared)
+        layout.addWidget(QLabel("Job description (paste or leave blank to demo):"))
+        self.jd_edit = QTextEdit()
+        self.jd_edit.setPlaceholderText("Paste a LinkedIn job description here, or describe the role briefly…")
+        self.jd_edit.setMaximumHeight(120)
+        layout.addWidget(self.jd_edit)
+
+        layout.addWidget(QLabel("Job title:"))
+        self.title_edit = QLineEdit()
+        layout.addWidget(self.title_edit)
+
+        layout.addWidget(QLabel("Company:"))
+        self.company_edit = QLineEdit()
+        layout.addWidget(self.company_edit)
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        for label, fn in [
+            ("📝 Cover letter",  self._cover_letter),
+            ("🎤 Interview Q&A",  self._interview),
+            ("✉ Follow-up email", self._followup),
+            ("💰 Salary benchmark", self._salary),
+            ("📋 Tailor resume", self._tailor),
+        ]:
+            b = QPushButton(label)
+            b.clicked.connect(fn)
+            btn_row.addWidget(b)
+        layout.addLayout(btn_row)
+
+        # Output
+        self.output = QTextEdit()
+        self.output.setReadOnly(True)
+        layout.addWidget(self.output, stretch=2)
+
+    def _job(self) -> dict:
+        return {
+            "title":      self.title_edit.text() or "Software Engineer",
+            "company":    self.company_edit.text() or "Acme",
+            "description": self.jd_edit.toPlainText(),
+            "link": "",
+        }
+
+    def _show(self, text: str):
+        self.output.setPlainText(text)
+
+    def _cover_letter(self):
+        self._show(generate_cover_letter(self.persona, self._job()))
+
+    def _interview(self):
+        qs = generate_interview_questions(self.persona, self._job())
+        out = []
+        for q in qs:
+            out.append(f"Q: {q['question']}\nA: {q['sample_answer']}\n")
+        self._show("\n".join(out))
+
+    def _followup(self):
+        self._show(generate_followup_email(self.persona, self._job(), days_since=7))
+
+    def _salary(self):
+        s = salary_benchmark(self.title_edit.text() or "Software Engineer",
+                              "United States", years_experience=10)
+        self._show(
+            f"p25: ${s['p25']:,}\n"
+            f"p50: ${s['p50']:,}\n"
+            f"p75: ${s['p75']:,}\n"
+            f"currency: {s['currency']}\n"
+            f"source: {s['source_estimate']}"
+        )
+
+    def _tailor(self):
+        bullets = tailor_resume(self.persona, self._job(), top_n=8)
+        self._show("Top 8 bullets for this job:\n\n" + "\n".join(f"- {b}" for b in bullets))
+
+
+class SettingsPage(QWidget):
+    """F9: theme switcher + F10: notification test."""
+
+    def __init__(self, parent: Optional[QWidget] = None, theme: Optional[ThemeManager] = None,
+                 notifier: Optional[Notifier] = None):
+        super().__init__(parent)
+        self.theme = theme or ThemeManager()
+        self.notifier = notifier or Notifier()
+        layout = QVBoxLayout(self)
+
+        # Theme
+        theme_box = QGroupBox("🎨 Theme (F9: Dark mode)")
+        fl = QFormLayout(theme_box)
+        self.theme_combo = QComboBox()
+        self.theme_combo.addItems(self.theme.available())
+        self.theme_combo.setCurrentText(self.theme.theme)
+        self.theme_combo.currentTextChanged.connect(self._on_theme_change)
+        fl.addRow("Theme:", self.theme_combo)
+        layout.addWidget(theme_box)
+
+        # Notifications
+        notif_box = QGroupBox("🔔 Notifications (F10)")
+        nl = QVBoxLayout(notif_box)
+        test_btn = QPushButton("Send a test notification")
+        test_btn.clicked.connect(self._test_notif)
+        nl.addWidget(test_btn)
+        avail = "available" if self.notifier.available else "not available (will log to console)"
+        nl.addWidget(QLabel(f"System tray: {avail}"))
+        layout.addWidget(notif_box)
+
+        layout.addStretch()
+
+    def _on_theme_change(self, name: str):
+        self.theme.set_theme(name)
+
+    def _test_notif(self):
+        self.notifier.notify("linkedin-autopilot", "Test notification from Lazi 🛋")
+
+
 # === Game Selection Page: pick an engine with playful descriptions ===
 
 class GameSelectionPage(QWidget):
@@ -819,13 +1135,33 @@ class TheCouch(QWidget):
         self.game_page = GameSelectionPage()
         self.game_page.engine_chosen.connect(self.engine_chosen)
         self.tabs.addTab(self.game_page, "🎮  Game Selection")
-        # Tab 5: Browser
+        # Tab 5: Job Tracker (F1) + Analytics (F3)
+        self.tracker_page = JobTrackerPage(persona_name=self.persona_name)
+        self.tabs.addTab(self.tracker_page, "📋  Tracker")
+        # Tab 6: Analytics
+        self.analytics_page = AnalyticsPage(persona_name=self.persona_name)
+        self.tabs.addTab(self.analytics_page, "📊  Analytics")
+        # Tab 7: Scheduler (F2)
+        self.scheduler_page = SchedulerPage()
+        self.tabs.addTab(self.scheduler_page, "⏰  Schedule")
+        # Tab 8: AI Assist (F4-F8)
+        from .profile_store import Persona as _P
+        persona_obj = _P(self.persona_name) if self.persona_name else None
+        if persona_obj and persona_obj.exists:
+            self.ai_assist_page = AIAssistPage(persona=persona_obj)
+        else:
+            self.ai_assist_page = AIAssistPage(persona=None)
+        self.tabs.addTab(self.ai_assist_page, "🤖  AI Assist")
+        # Tab 9: Browser
         from .browser_widget import BrowserWidget
         self.browser = BrowserWidget()
         self.tabs.addTab(self.browser, "🌐  Browser")
-        # Tab 6: Passwords
+        # Tab 10: Passwords
         self.passwords = PasswordVaultWidget()
         self.tabs.addTab(self.passwords, "🔒  Passwords")
+        # Tab 11: Settings (F9 + F10)
+        self.settings_page = SettingsPage(theme=ThemeManager(), notifier=Notifier())
+        self.tabs.addTab(self.settings_page, "⚙  Settings")
 
     def _build_welcome_tab(self) -> QWidget:
         w = QWidget()

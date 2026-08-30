@@ -87,25 +87,30 @@ print("\nAC19: TheCouch has 3 tabs (Welcome / Browser / Passwords)")
 from app.lazibot import TheCouch, PasswordVaultWidget
 c = TheCouch()
 check("TheCouch has a QTabWidget", c.tabs is not None)
-check("TheCouch has 6 tabs (Welcome, Walkthroughs, Profile, Game Selection, Browser, Passwords)",
-      c.tabs.count() == 6, f"got {c.tabs.count()}")
+check("TheCouch has 11 tabs (Welcome, Walkthroughs, Profile, Game Selection, Tracker, Analytics, Schedule, AI Assist, Browser, Passwords, Settings)",
+      c.tabs.count() == 11, f"got {c.tabs.count()}")
 check("TheCouch has Welcome tab (0)",      c.tabs.tabText(0).startswith("☕"))
 check("TheCouch has Walkthroughs tab (1)",  c.tabs.tabText(1).startswith("📖"))
 check("TheCouch has Profile tab (2)",       c.tabs.tabText(2).startswith("👤"))
 check("TheCouch has Game Selection tab (3)",c.tabs.tabText(3).startswith("🎮"))
-check("TheCouch has Browser tab (4)",       c.tabs.tabText(4).startswith("🌐"))
-check("TheCouch has Passwords tab (5)",     c.tabs.tabText(5).startswith("🔒"))
-check("TheCouch has BrowserWidget on tab 4", c.browser is not None)
-check("TheCouch has PasswordVaultWidget on tab 5", c.passwords is not None)
+check("TheCouch has Tracker tab (4)",      c.tabs.tabText(4).startswith("📋"))
+check("TheCouch has Analytics tab (5)",     c.tabs.tabText(5).startswith("📊"))
+check("TheCouch has Schedule tab (6)",     c.tabs.tabText(6).startswith("⏰"))
+check("TheCouch has AI Assist tab (7)",    c.tabs.tabText(7).startswith("🤖"))
+check("TheCouch has Browser tab (8)",       c.tabs.tabText(8).startswith("🌐"))
+check("TheCouch has Passwords tab (9)",     c.tabs.tabText(9).startswith("🔒"))
+check("TheCouch has Settings tab (10)",    c.tabs.tabText(10).startswith("⚙"))
+check("TheCouch has BrowserWidget on tab 8", c.browser is not None)
+check("TheCouch has PasswordVaultWidget on tab 9", c.passwords is not None)
 
 
-# === PersonaPicker still works with new 6-tab Couch ===
+# === PersonaPicker still works with new 11-tab Couch ===
 
-print("\nAC20: PersonaPicker builds with 6-tab Couch")
+print("\nAC20: PersonaPicker builds with 11-tab Couch")
 from app.main import PersonaPicker
 p = PersonaPicker()
-check("PersonaPicker has 6-tab Couch",
-      p.couch.tabs.count() == 6,
+check("PersonaPicker has 11-tab Couch",
+      p.couch.tabs.count() == 11,
       f"got {p.couch.tabs.count()}")
 
 

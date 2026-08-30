@@ -287,6 +287,20 @@ def run(
         result.jobs_applied = getattr(adapter, "applied_count", 0)
         result.jobs_failed = getattr(adapter, "failed_count", 0)
         result.jobs_skipped = max(0, len(jobs) - result.jobs_applied - result.jobs_failed)
+
+        # F1: auto-record every successfully applied job to the JobTracker
+        try:
+            from .job_tracker import record_application
+            for i in range(result.jobs_applied):
+                if i < len(jobs):
+                    record_application(
+                        persona=persona_name,
+                        job=jobs[i].to_dict(),
+                        status="applied",
+                        engine=engine_name,
+                    )
+        except Exception as e:
+            logger.warning("Failed to record applications: %s", e)
     except Exception as e:
         logger.error("Engine %s failed: %s", engine_name, e)
         result.errors.append(f"engine {engine_name}: {e}")
