@@ -25,6 +25,19 @@ import random
 from pathlib import Path
 from typing import Optional, Callable, Dict, Any, List
 
+# ── Phase 2: Enhanced LaziBrain ─────────────────────────────────────────────
+# Replace the simple LaziBrain below with the full enhanced supervisor agent.
+try:
+    from app.lazibrain_core import LaziBrainCore
+    from app.mcp_bridge import MCPBridge
+    from app.tool_decorator import register_tool, get_tool
+    _HAS_PHASE2 = True
+except ImportError:
+    LaziBrainCore = None
+    MCPBridge = None
+    register_tool = lambda **_: (lambda f: f)  # no-op decorator
+    _HAS_PHASE2 = False
+
 from PySide6.QtCore import Qt, QTimer, Signal, QObject, QSize, QPoint, QRect, QPropertyAnimation, QEasingCurve, QParallelAnimationGroup
 from PySide6.QtGui import QPainter, QColor, QBrush, QPen, QFont, QFontDatabase, QPixmap, QLinearGradient
 from PySide6.QtWidgets import (
@@ -56,31 +69,240 @@ LAZI_ART_LINES = [
 ]
 
 
+# === Phase 2: Engine Tool Registration ===========================================
+# Register all 6 engines as LaziBrain tools.
+# These are available in the ReAct loop's tool registry.
+
+if _HAS_PHASE2:
+
+    @register_tool(
+        name="easyapplyjobsbot",
+        description="Best for volume: applies to every job LinkedIn throws at you. "
+                   "No cover letter support. Returns applied/failed/skipped counts.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Job title or search query"},
+                "location": {"type": "string", "description": "Job location"},
+                "max_jobs": {"type": "integer", "description": "Max jobs to apply to", "default": 50},
+                "headless": {"type": "boolean", "description": "Run headless?", "default": True},
+            },
+            "required": ["query", "location"],
+        },
+    )
+    def _tool_easyapplyjobsbot(query: str, location: str, max_jobs: int = 50, headless: bool = True, signal=None):
+        """Engine 1: easyapplyjobsbot tool wrapper."""
+        signal.raise_if_aborted()
+        # engines/easyapplyjobsbot/ is read-only; import and call it
+        try:
+            import sys
+            from pathlib import Path
+            engines_path = str(Path(__file__).parent.parent / "engines" / "easyapplyjobsbot")
+            sys.path.insert(0, engines_path)
+            from easy_apply import run as ea_run
+            result = ea_run(query=query, location=location, max_jobs=max_jobs, headless=headless)
+            return str(result)
+        except Exception as exc:
+            return f"[easyapplyjobsbot ERROR] {exc}"
+
+    @register_tool(
+        name="linkedin_aihawk",
+        description="AI-tailored applications with cover letter generation. "
+                   "Higher quality per application. Slower.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "job_url": {"type": "string"},
+                "tailor_resume": {"type": "boolean", "default": True},
+                "cover_letter": {"type": "boolean", "default": True},
+            },
+            "required": ["job_url"],
+        },
+    )
+    def _tool_linkedin_aihawk(job_url: str, tailor_resume: bool = True, cover_letter: bool = True, signal=None):
+        """Engine 2: linkedin-aihawk tool wrapper."""
+        signal.raise_if_aborted()
+        try:
+            import sys
+            from pathlib import Path
+            engines_path = str(Path(__file__).parent.parent / "engines" / "linkedin_aihawk")
+            sys.path.insert(0, engines_path)
+            from linkedin_ai_hawk import run as hawk_run
+            result = hawk_run(job_url=job_url, tailor_resume=tailor_resume, cover_letter=cover_letter)
+            return str(result)
+        except Exception as exc:
+            return f"[linkedin-aihawk ERROR] {exc}"
+
+    @register_tool(
+        name="auto_job_applier",
+        description="Medium volume, good balance of speed and customization. "
+                   "Reads user_config.json for per-field answers.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "location": {"type": "string"},
+                "max_applications": {"type": "integer", "default": 30},
+                "resume_v2": {"type": "boolean", "default": False},
+            },
+        },
+    )
+    def _tool_auto_job_applier(query: str, location: str, max_applications: int = 30, resume_v2: bool = False, signal=None):
+        """Engine 3: auto-job-applier tool wrapper."""
+        signal.raise_if_aborted()
+        try:
+            import sys
+            from pathlib import Path
+            engines_path = str(Path(__file__).parent.parent / "engines" / "auto-job-applier")
+            sys.path.insert(0, engines_path)
+            from apply import run as auto_run
+            result = auto_run(query=query, location=location, max_applications=max_applications)
+            return str(result)
+        except Exception as exc:
+            return f"[auto-job-applier ERROR] {exc}"
+
+    @register_tool(
+        name="linkedin_bot",
+        description="General-purpose LinkedIn bot with easy_apply mode. "
+                   "Supports base_url override for custom LLM endpoints.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "search_query": {"type": "string"},
+                "locations": {"type": "array", "items": {"type": "string"}},
+                "base_url": {"type": "string"},
+            },
+        },
+    )
+    def _tool_linkedin_bot(search_query: str, locations: list[str] = None, base_url: str = None, signal=None):
+        """Engine 4: linkedin-bot tool wrapper."""
+        signal.raise_if_aborted()
+        try:
+            import sys
+            from pathlib import Path
+            engines_path = str(Path(__file__).parent.parent / "engines" / "linkedin-bot")
+            sys.path.insert(0, engines_path)
+            from bot import run as bot_run
+            result = bot_run(search_query=search_query, locations=locations or [], base_url=base_url)
+            return str(result)
+        except Exception as exc:
+            return f"[linkedin-bot ERROR] {exc}"
+
+    @register_tool(
+        name="job_apply_ai_agent",
+        description="AI-first agent that reads the full job page and decides "
+                   "whether to apply. Best rejection filtering.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "job_url": {"type": "string"},
+                "strict_mode": {"type": "boolean", "default": True},
+            },
+            "required": ["job_url"],
+        },
+    )
+    def _tool_job_apply_ai_agent(job_url: str, strict_mode: bool = True, signal=None):
+        """Engine 5: job-apply-ai-agent tool wrapper."""
+        signal.raise_if_aborted()
+        try:
+            import sys
+            from pathlib import Path
+            engines_path = str(Path(__file__).parent.parent / "engines" / "Job-apply-AI-agent")
+            sys.path.insert(0, engines_path)
+            from agent import run as agent_run
+            result = agent_run(job_url=job_url, strict_mode=strict_mode)
+            return str(result)
+        except Exception as exc:
+            return f"[job-apply-ai-agent ERROR] {exc}"
+
+    @register_tool(
+        name="page_agent",
+        description="JavaScript in-page agent (Engine 6). Use when Selenium is blocked by anti-bot, "
+                   "for React SPAs, or Fast Apply forms requiring real DOM. "
+                   "Communicates via MCP to browser.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "Natural language instruction for the browser agent"},
+                "tab_url": {"type": "string", "description": "URL of the browser tab to target"},
+                "wait_for": {"type": "integer", "description": "Seconds to wait after action", "default": 2},
+            },
+            "required": ["task"],
+        },
+    )
+    def _tool_page_agent(task: str, tab_url: str = "", wait_for: int = 2, signal=None):
+        """Engine 6: page-agent via MCP Bridge — handled specially by LaziBrainCore._execute_tool."""
+        # This tool is routed through MCP Bridge → page-agent in the ReAct loop
+        return f"[page_agent routed via MCP Bridge] task={task}"
+
+
 # === The LLM bridge ===
 
 class LaziBrain(QObject):
     """
     Talks to the user's chosen LLM provider using a tiny HTTP call.
     Lazy-imports openai so the GUI can load without it.
+
+    Phase 2: When app.lazibrain_core is available, this delegates to
+    LaziBrainCore which has the enhanced ReAct loop, event bus,
+    tool registry (6 engines), and MCP Bridge support.
     """
     reply = Signal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, mcp_bridge=None, vault=None):
         super().__init__(parent)
-        self.provider = "poolside"
-        self.api_key  = None
-        self.history: List[Dict[str, str]] = []
+
+        if _HAS_PHASE2 and LaziBrainCore is not None:
+            # Phase 2 enhanced brain — full ReAct loop + event bus
+            self._core: Optional[LaziBrainCore] = LaziBrainCore(
+                parent=parent, mcp_bridge=mcp_bridge, vault=vault
+            )
+            # Forward core signals → LaziBrain signals for backward compat
+            self._core.reply.connect(self.reply)
+        else:
+            self._core = None
+            self.provider = "poolside"
+            self.api_key = None
+            self.history: List[Dict[str, str]] = []
 
     def configure(self, provider: str, api_key: Optional[str]):
-        self.provider = provider
-        self.api_key = api_key
+        if self._core:
+            self._core.configure(provider, api_key)
+        else:
+            self.provider = provider
+            self.api_key = api_key
+
+    def set_mcp_bridge(self, bridge):
+        """Inject MCP Bridge (page-agent connection). Phase 2 only."""
+        if self._core:
+            self._core.set_mcp_bridge(bridge)
+
+    def set_vault(self, vault):
+        """Inject Vault. Phase 2 only."""
+        if self._core:
+            self._core.set_vault(vault)
+
+    @property
+    def mcp_bridge(self):
+        """Access the MCP Bridge. Phase 2 only."""
+        return self._core.mcp_bridge if self._core else None
+
+    @property
+    def is_enhanced(self) -> bool:
+        """True if Phase 2 enhanced brain is active."""
+        return self._core is not None
 
     def ask(self, user_msg: str, system_prompt: str = "") -> None:
         """
-        Async-ish: append to history, then call LLM in background. For now
-        we use a simple Timer to keep the GUI responsive; if the openai
-        import fails, we fall back to canned replies.
+        Async-ish: append to history, then call LLM in background.
+        Phase 2: delegates to LaziBrainCore.ask_async() with full ReAct loop.
+        Fallback: simple Timer + canned replies.
         """
+        if self._core:
+            self._core.ask(user_msg, system_prompt)
+            return
+
+        # ── Phase 1 fallback ────────────────────────────────────────────────
         self.history.append({"role": "user", "content": user_msg})
         QTimer.singleShot(0, lambda: self._call_llm(system_prompt))
 

@@ -1,11 +1,12 @@
 """
-Lazi Integration — wires vault + self-healer + scrapers into the Lazi-Bot GUI
+Lazi Integration — wires vault + self-healer + MCP Bridge into the Lazi-Bot GUI
 ================================================================================
 Exposes a simple `setup_lazi_integration(controller)` call that:
   1. Boots the Vault singleton (non-blocking, 8s timeout)
   2. Boots the SelfHealer + HiveMindFixBroadcaster
-  3. Wires both into LaziBrain so corrections and failures are auto-logged
-  4. Adds learnings/corrections tab to TheCouch
+  3. Boots the MCP Bridge (Phase 2: page-agent as Engine 6)
+  4. Wires all three into LaziBrain so corrections and failures are auto-logged
+  5. Wires MCP Bridge so page-agent can be used as anti-bot fallback
 
 Call this once from AppController.__init__ after the UI is built.
 """
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 _vault_instance: Any = None
 _self_healer_instance: Any = None
 _hive_broadcaster: Any = None
+_mcp_bridge_instance: Any = None
 _vault_init_started: bool = False
 
 
@@ -59,15 +61,40 @@ def _boot_vault() -> Any:
         return None, None, None
 
 
-def setup_lazi_integration(controller: "AppController") -> None:
+def _boot_mcp_bridge() -> Any:
+    """
+    Boot the MCP Bridge (page-agent as Engine 6).
+    Runs synchronously — returns the bridge ready to use.
+    Falls back to a stub bridge if mcp_bridge.py is unavailable.
+    """
+    global _mcp_bridge_instance
+    if _mcp_bridge_instance is not None:
+        return _mcp_bridge_instance
+
+    try:
+        from app.mcp_bridge import MCPBridge
+        bridge = MCPBridge()
+        _mcp_bridge_instance = bridge
+        logger.info("[LaziIntegration] MCP Bridge initialized (stub mode — page-agent not connected)")
+        return bridge
+    except Exception as exc:
+        logger.warning("[LaziIntegration] MCP Bridge init failed: %s", exc)
+        return None
+
+
+def setup_lazi_integration(controller: "AppController") -> Any:
     """
     Call once from AppController.__init__ after UI is fully built.
     Non-blocking: vault boots on a background thread.
+    Returns the MCP Bridge immediately (synchronous init).
     """
     global _vault_init_started
     if _vault_init_started:
-        return
+        return _mcp_bridge_instance
     _vault_init_started = True
+
+    # Boot MCP Bridge synchronously (fast, no I/O)
+    _boot_mcp_bridge()
 
     def _background_boot():
         vault, healer, broadcaster = _boot_vault()
@@ -84,6 +111,7 @@ def setup_lazi_integration(controller: "AppController") -> None:
 
     t = threading.Thread(target=_background_boot, daemon=True)
     t.start()
+    return _mcp_bridge_instance
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -101,6 +129,10 @@ def get_self_healer() -> Any:
 
 def get_hive_broadcaster() -> Any:
     return _hive_broadcaster
+
+
+def get_mcp_bridge() -> Any:
+    return _mcp_bridge_instance
 
 
 def is_ready() -> bool:

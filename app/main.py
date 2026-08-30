@@ -81,7 +81,8 @@ class AppController(QObject):
         # apply initial theme
         apply_app_theme(app, self.theme_name)
         # Boot vault + self-healer in background (non-blocking, 8s timeout)
-        lazi_integration.setup_lazi_integration(self)
+        # MCP Bridge is returned synchronously
+        self._mcp_bridge = lazi_integration.setup_lazi_integration(self)
 
     def track_window(self, w: QMainWindow) -> None:
         self._windows.append(w)
@@ -1174,6 +1175,13 @@ def main():
     app = QApplication(sys.argv)
     controller = AppController(app)
     brain = LaziBrain()
+    # Inject vault + MCP bridge into LaziBrain (Phase 2: enables ReAct loop + Engine 6)
+    vault = lazi_integration.get_vault()
+    mcp_bridge = lazi_integration.get_mcp_bridge()
+    if vault is not None:
+        brain.set_vault(vault)
+    if mcp_bridge is not None:
+        brain.set_mcp_bridge(mcp_bridge)
     win = PersonaPicker(controller, brain)
     # Show WelcomeSplash on first run
     splash = WelcomeSplash(win)
