@@ -21,7 +21,7 @@ pdfplumber>=0.11.0
 cryptography>=42.0.0
 
 # --- embedded browser (Qt WebEngine ships with PySide6-Addons) ---
-PySide6-Addons>=6.6.0
+PySide6-Addons>=6.11.2
 
 # --- engines (subprocess deps, must be in venv) ---
 undetected-chromedriver>=3.5.0
