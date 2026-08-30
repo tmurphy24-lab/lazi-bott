@@ -1,0 +1,34 @@
+# linkedin-autopilot — unified wrapper for the 5 existing bots.
+# Installs into its own venv. The engines/ folder contains COPIES of the
+# original MIT-licensed bots — they are not modified (except the two patched
+# files in engines/linkedin-bot, documented in AGENTS.md).
+
+# --- wrapper GUI + infra ---
+PySide6>=6.6.0
+selenium>=4.15.0
+webdriver-manager>=4.0.0
+python-dotenv>=1.0.0
+PyYAML>=6.0
+keyring>=24.0.0
+openai>=1.0.0
+openpyxl>=3.1.0
+
+# --- resume parser ---
+python-docx>=1.1.0
+pdfplumber>=0.11.0
+
+# --- encrypted vault ---
+cryptography>=42.0.0
+
+# --- embedded browser (Qt WebEngine ships with PySide6-Addons) ---
+PySide6-Addons>=6.6.0
+
+# --- engines (subprocess deps, must be in venv) ---
+undetected-chromedriver>=3.5.0
+pandas>=2.0.0
+pygame>=2.5.0
+pyautogui>=0.9.54
+selenium-stealth>=1.0.6
+
+# --- optional: embedded browser ---
+playwright>=1.40.0

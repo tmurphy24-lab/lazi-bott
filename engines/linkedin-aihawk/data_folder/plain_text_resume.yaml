@@ -1,0 +1,174 @@
+personal_information:
+  name: "Trevor"
+  surname: "Murphy"
+  date_of_birth: ""
+  country: "United States"
+  city: "Hudson"
+  address: "Hudson, FL"
+  zip_code: "34667"
+  phone_prefix: "+1"
+  phone: "8136183306"
+  email: "tmurphy24@email.davenport.edu"
+  github: ""
+  linkedin: "https://linkedin.com/in/trevor-murphy88"
+
+education_details:
+  - education_level: "MBA"
+    institution: "Davenport University"
+    field_of_study: "Strategic Management"
+    final_evaluation_grade: ""
+    start_date: "2020"
+    year_of_completion: "2023"
+    exam:
+      exam_name_1: ""
+      exam_name_2: ""
+      exam_name_3: ""
+      exam_name_4: ""
+      exam_name_5: ""
+      exam_name_6: ""
+
+  - education_level: "BBA"
+    institution: "Davenport University"
+    field_of_study: "Logistics, Materials, and Supply Chain Management"
+    final_evaluation_grade: ""
+    start_date: "2016"
+    year_of_completion: "2020"
+    exam:
+      exam_name_1: ""
+      exam_name_2: ""
+      exam_name_3: ""
+      exam_name_4: ""
+      exam_name_5: ""
+      exam_name_6: ""
+
+experience_details:
+  - position: "Global Supply Chain Leader / Director of Procurement and Supplier Strategy"
+    company: "Freedom USA (Freedom Global USA)"
+    employment_period: "01/2025 - Present"
+    location: "Odessa, FL"
+    industry: "Aerospace Manufacturing / Distribution"
+    key_responsibilities:
+      - responsibility_1: "Eliminated $9.2M in production losses through end-to-end value stream mapping"
+      - responsibility_2: "Restored 99% inventory fill rates by rebuilding S&OP and demand planning in SAP IBP"
+      - responsibility_3: "Directed 60 procurement, logistics, and planning professionals across multi-site aerospace operations"
+      - responsibility_4: "Steered $12M annual procurement across 45 vendor partners; cut contract processing time 34%"
+      - responsibility_5: "Avoided $3.8M+ ITAR penalty risk with zero violations across 3 DFARS and ECCN audit cycles"
+    skills_acquired:
+      - "S&OP / IBP"
+      - "Strategic Sourcing"
+      - "Value Stream Mapping"
+      - "SAP IBP"
+      - "Supplier Lifecycle Management"
+
+  - position: "Senior Global Supply Chain & Operations Manager / Senior Procurement Manager"
+    company: "NAC Group"
+    employment_period: "03/2021 - 01/2025"
+    location: "St. Petersburg, FL"
+    industry: "Global Manufacturing"
+    key_responsibilities:
+      - responsibility_1: "Captured $5M annual savings through strategic sourcing across global supply base"
+      - responsibility_2: "Achieved 97% on-time delivery from 83% through Lean Six Sigma deployment"
+      - responsibility_3: "Governed $200M transformation budget delivering 12% working capital improvement via IBP"
+      - responsibility_4: "Negotiated $1M+ annual freight savings by consolidating carrier contracts"
+      - responsibility_5: "Led 12 supply chain professionals; 4 promoted; external leadership hires reduced 50%"
+    skills_acquired:
+      - "Lean Six Sigma"
+      - "Supplier Risk Management"
+      - "Working Capital Optimization"
+      - "Contract Negotiation"
+      - "Team Development"
+
+  - position: "Senior Global Supply Chain & Procurement Manager / Supplier Fulfillment Manager"
+    company: "Sri Trang Group"
+    employment_period: "04/2018 - 03/2021"
+    location: "Tampa, FL"
+    industry: "Manufacturing / Distribution"
+    key_responsibilities:
+      - responsibility_1: "Generated $3.5M P&L improvements by consolidating supplier base from 300 to 175 partners"
+      - responsibility_2: "Led SAP S/4HANA implementation under agile cadence for 45 users across 3 plants"
+      - responsibility_3: "Delivered 25% forecast accuracy improvement using AI-driven demand planning"
+      - responsibility_4: "Improved inventory turns from 5.4 to 7.2; avoided $690K shortage exposure"
+      - responsibility_5: "Built and led 6-person global procurement team across 3 regions"
+    skills_acquired:
+      - "SAP S/4HANA"
+      - "Demand Planning"
+      - "Category Management"
+      - "Change Management"
+      - "MRP"
+
+  - position: "Supply Chain Logistics Manager"
+    company: "Meijer Corporate / Distribution Center"
+    employment_period: "04/2016 - 04/2018"
+    location: "Grand Rapids, MI"
+    industry: "Retail Distribution"
+    key_responsibilities:
+      - responsibility_1: "Unlocked $1.8M operational savings through Lean Six Sigma across distribution footprint"
+      - responsibility_2: "Sustained 96%+ on-time delivery managing 10,000 daily cases"
+      - responsibility_3: "Improved productivity 22%, from 142 to 173 cases per hour"
+      - responsibility_4: "Led 25 warehouse and transportation staff across 3 shifts"
+      - responsibility_5: "Trained and certified 6 supervisors as Lean Six Sigma Green Belts"
+    skills_acquired:
+      - "Distribution Operations"
+      - "Route Optimization"
+      - "Lean Six Sigma Green Belt Training"
+      - "Transportation Management"
+
+  - position: "Senior Supply Chain Program Manager"
+    company: "US Army"
+    employment_period: "01/2008 - 04/2016"
+    location: "Tacoma, WA"
+    industry: "Government / Defense Logistics"
+    key_responsibilities:
+      - responsibility_1: "Commanded $65M in assets and $12M annual operating budget across logistics in 4 countries"
+      - responsibility_2: "Mobilized 500+ personnel sustaining 99%+ operational readiness"
+      - responsibility_3: "Recovered $3.2M working capital through inventory rationalization"
+      - responsibility_4: "Cut unplanned logistics downtime 48% via business continuity protocols"
+      - responsibility_5: "Reconciled 1,180 inventory items with zero remaining discrepancies"
+    skills_acquired:
+      - "Logistics Command"
+      - "Budget Management"
+      - "Business Continuity"
+      - "Inventory Reconciliation"
+      - "Team Leadership"
+
+projects:
+  - name: "SAP S/4HANA Implementation"
+    description: "Led agile-cadence ERP rollout for 45 cross-functional users across 3 plants; achieved 92% user adoption within 90 days"
+    link: ""
+
+  - name: "ERP and MES Migration"
+    description: "Corrected 40,000 part records during migration, recovering $1.6M in stranded purchase orders"
+    link: ""
+
+  - name: "AI-Driven Demand Planning Deployment"
+    description: "Delivered 25% forecast accuracy improvement across full SKU portfolio using AI-driven planning"
+    link: ""
+
+achievements:
+  - name: "Production Loss Elimination"
+    description: "Eliminated $9.2M in production losses through end-to-end value stream mapping"
+  - name: "Inventory Fill Rate Restoration"
+    description: "Restored 99% inventory fill rates by rebuilding S&OP and demand planning in SAP IBP"
+  - name: "ITAR Compliance"
+    description: "Avoided $3.8M+ penalty risk sustaining zero violations across 3 DFARS and ECCN audit cycles"
+
+certifications:
+  - "Lean Six Sigma Black Belt"
+  - "Six Sigma Champion Certified"
+  - "Change Management Specialist"
+  - "ISO 9001:2015 Certified"
+  - "Product Management: Building a Product Strategy"
+  - "Inventory Management Foundations"
+  - "Leading with Vision"
+  - "Agile Project Management with Microsoft Project"
+
+languages:
+  - language: "English"
+    proficiency: "Native"
+
+interests:
+  - "Supply Chain Strategy"
+  - "Digital Transformation"
+  - "Procurement and Supplier Management"
+  - "Process Improvement"
+  - "S&OP / Demand Planning"

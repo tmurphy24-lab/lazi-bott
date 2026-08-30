@@ -1,0 +1,18 @@
+personal_info:
+  first_name: Trevor
+  last_name: Murphy
+  email: tmurphy24@email.davenport.edu
+  phone: (813) 555-0142
+  linkedin_url: https://linkedin.com/in/trevor-murphy-supply
+  city: Tampa
+  state: FL
+  country: United States
+resume_path: ''
+skills:
+- Supply Chain
+- Procurement
+- Logistics
+experience: []
+education: []
+blacklist_companies: []
+blacklist_titles: []

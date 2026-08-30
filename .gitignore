@@ -1,0 +1,41 @@
+# --- virtual env ---
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.pytest_cache/
+
+# --- secrets / API keys ---
+keys/
+*.key
+*.pem
+.env
+.env.*
+
+# --- persona browser data (cookies, Chrome session) ---
+personas/*/browser_profile/
+personas/*/cookies/
+personas/*/Default/
+
+# --- run outputs (large, regenerable) ---
+runs/
+logs/
+*.log
+*.xlsx
+*.csv
+*.pkl
+
+# --- engine copies: keep the engines/ dir in git (they're MIT-licensed
+#     copies the user explicitly wants) but ignore the runtime overrides
+#     each adapter writes, so we never accidentally commit user-specific
+#     config into the wrapper repo ---
+engines/EasyApplyJobsBot/config_autopilot.py
+engines/EasyApplyJobsBot/config.py.bak
+engines/auto-job-applier/config/search_autopilot.py
+engines/auto-job-applier/user_config.json
+engines/linkedin-aihawk/data_folder/secrets.yaml
+engines/linkedin-aihawk/data_folder/resume.pdf
+engines/linkedin-bot/config.json
