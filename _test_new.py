@@ -69,8 +69,17 @@ check("QSpinBox imported at top level (no _SpinBox hack)",
 # === AC9: profile_store has new params + blacklist add/remove ===
 
 print("\nAC9: profile_store range params + blacklist add/remove")
-from app.profile_store import Persona, ensure_persona, PARAM_SCHEMA, list_personas
-p = ensure_persona("procurement")
+from app.profile_store import Persona, create_persona, ensure_persona, PARAM_SCHEMA, list_personas
+# User creates the persona with their own salary range (no hardcoded values)
+p = create_persona("procurement", config={
+    "titles": ["Director of Procurement"],
+    "salary_min": 120000,
+    "salary_max": 250000,
+    "experience_years_min": 10,
+    "experience_years_max": 25,
+    "blacklist_companies": ["Crossover", "Jobot"],
+    "blacklist_titles": ["Junior", "Intern"],
+})
 cfg = p.load_config()
 check("salary_min in config", cfg.get("salary_min") == 120000)
 check("salary_max in config", cfg.get("salary_max") == 250000)
@@ -139,7 +148,16 @@ print("\nAC11: auto_filler")
 from app.auto_filler import answer_form, build_answerer, make_on_job_filter, answer_question
 
 # Use the supply-chain-exec persona which we'll set up with profile data
-p = ensure_persona("supply-chain-exec")
+# (the test supplies its own config; no hardcoded defaults)
+p = create_persona("supply-chain-exec", config={
+    "titles": ["Director of Supply Chain"],
+    "salary_min": 120000,
+    "salary_max": 250000,
+    "experience_years_min": 10,
+    "experience_years_max": 25,
+    "blacklist_companies": ["Crossover", "Jobot", "Dice"],
+    "blacklist_titles": ["Junior", "Intern", "Coordinator"],
+})
 profile = p.load_profile()
 profile["personal_info"] = {
     "first_name": "Trevor", "last_name": "Murphy",

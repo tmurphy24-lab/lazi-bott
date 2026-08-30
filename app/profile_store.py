@@ -219,78 +219,81 @@ def resolve_api_key(provider: str) -> Optional[str]:
 
 # --- persona bootstrap ---
 
-DEFAULT_PERSONA_CONFIGS = {
-    "supply-chain-exec": {
-        "titles": [
-            "Director of Supply Chain", "Supply Chain Director", "VP Supply Chain",
-            "Head of Supply Chain", "Senior Supply Chain Manager", "Global Supply Chain Manager",
-            "Director of Operations", "Director of Logistics", "Head of Planning", "Director of Planning",
-        ],
-        "location": "United States",
-        "salary_min": 120000,
-        "salary_max": 250000,
-        "experience_years_min": 10,
-        "experience_years_max": 25,
-        "experience_levels": ["Mid-Senior level", "Director"],
-        "job_types": ["Full-time", "Part-time"],
-        "date_posted": "Past Week",
-        "blacklist_companies": [
-            "Crossover", "Jobot", "Dice", "Insight Global", "TEKsystems",
-            "Aerotek", "Randstad", "Adecco", "Kforce", "Motion Recruitment",
-            "Cynet", "Artech", "Collabera",
-        ],
-        "blacklist_titles": [
-            "Junior", "Entry Level", "Intern", "Coordinator", "Assistant",
-            "Apprentice", "Clerk", "Technician", "Driver", "CDL",
-            "Software", "Developer", "Frontend", "Full Stack",
-            "Recruiter", "Sales Representative", "Nurse", "Teacher",
-        ],
-        "apply_once_at_company": True,
-        "max_applications": 50,
-    },
-    "procurement": {
-        "titles": [
-            "Director of Procurement", "Head of Procurement", "Senior Procurement Manager",
-            "Strategic Sourcing Manager", "Category Manager", "Supplier Fulfillment Manager",
-            "Materials Manager", "Supplier Performance Manager", "Purchasing Manager",
-            "Head of Supplier Management",
-        ],
-        "location": "United States",
-        "salary_min": 120000,
-        "salary_max": 250000,
-        "experience_years_min": 10,
-        "experience_years_max": 25,
-        "experience_levels": ["Mid-Senior level", "Director"],
-        "job_types": ["Full-time", "Part-time"],
-        "date_posted": "Past Week",
-        "blacklist_companies": [
-            "Crossover", "Jobot", "Dice", "Insight Global", "TEKsystems",
-            "Aerotek", "Randstad", "Adecco", "Kforce", "Motion Recruitment",
-            "Cynet", "Artech", "Collabera",
-        ],
-        "blacklist_titles": [
-            "Junior", "Entry Level", "Intern", "Coordinator", "Assistant",
-            "Apprentice", "Clerk", "Technician", "Driver", "CDL",
-            "Software", "Developer", "Frontend", "Full Stack",
-            "Recruiter", "Sales Representative", "Nurse", "Teacher",
-        ],
-        "apply_once_at_company": True,
-        "max_applications": 50,
-    },
+# An empty placeholder config. The user fills in titles, salary range, etc.
+# after the persona is created — we never auto-populate titles because that's
+# specific to the person using the app.
+EMPTY_PERSONA_CONFIG: Dict[str, Any] = {
+    "titles": [],
+    "location": "United States",
+    "salary_min": 0,
+    "salary_max": 0,
+    "experience_years_min": 0,
+    "experience_years_max": 0,
+    "experience_levels": [],
+    "job_types": ["Full-time"],
+    "date_posted": "Past Week",
+    "blacklist_companies": [],
+    "blacklist_titles": [],
+    "apply_once_at_company": True,
+    "max_applications": 50,
 }
 
 
+def create_persona(persona_name: str, config: Optional[Dict[str, Any]] = None) -> Persona:
+    """
+    Create a new persona with user-supplied (or empty) config.
+    Overwrites any existing persona of the same name.
+    Returns the Persona.
+    """
+    p = Persona(persona_name)
+    p.ensure_dirs()
+    cfg = dict(EMPTY_PERSONA_CONFIG)
+    if config:
+        cfg.update(config)
+    p.save_config(cfg)
+    # ensure profile.yaml exists with empty defaults
+    if not p.profile_path.exists():
+        p.save_profile(p.load_profile())
+    logger.info("Created persona '%s' with user-supplied config", persona_name)
+    return p
+
+
 def ensure_persona(persona_name: str) -> Persona:
-    """Create persona dir + default search_config.yaml + profile.yaml if missing."""
+    """
+    Lightweight ensure: creates the dir + empty config + empty profile
+    if missing. Does NOT populate any hardcoded titles/companies. The user
+    must supply their own data via create_persona() or by editing the YAML
+    in the GUI.
+    """
     p = Persona(persona_name)
     if not p.exists:
         p.ensure_dirs()
-        defaults = DEFAULT_PERSONA_CONFIGS.get(
-            persona_name, DEFAULT_PERSONA_CONFIGS["supply-chain-exec"]
-        )
-        p.save_config(defaults)
-        logger.info("Created persona '%s' with default config", persona_name)
-    # always ensure profile.yaml exists
+        p.save_config(dict(EMPTY_PERSONA_CONFIG))
+        logger.info("Created empty persona '%s'", persona_name)
     if not p.profile_path.exists():
         p.save_profile(p.load_profile())
     return p
+
+
+def delete_persona(persona_name: str) -> bool:
+    """Delete a persona's directory and all its files. Returns True if removed."""
+    import shutil
+    p = Persona(persona_name)
+    if not p.dir.exists():
+        return False
+    shutil.rmtree(p.dir, ignore_errors=True)
+    logger.info("Deleted persona '%s'", persona_name)
+    return True
+
+
+def rename_persona(old_name: str, new_name: str) -> Optional[Persona]:
+    """Rename a persona directory. Returns the new Persona, or None if not found."""
+    import shutil
+    old = Persona(old_name)
+    new = Persona(new_name)
+    if not old.dir.exists():
+        return None
+    if new.dir.exists():
+        return None  # refuse to overwrite
+    old.dir.rename(new.dir)
+    return new

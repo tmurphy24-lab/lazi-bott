@@ -268,6 +268,7 @@ class TheCouch(QWidget):
         "Welcome to the Couch, chief.\n\n"
         "I'm Lazi — your slightly overweight, slightly dirty, very useful assistant.\n"
         "This here is the Command Center. You set up:\n"
+        "  • A persona (your job-search identity — pick '+ New persona' on the left)\n"
         "  • Who you are (name, email, phone)\n"
         "  • What you want (titles, salary range, experience years)\n"
         "  • Who to avoid (blacklist)\n"
@@ -336,15 +337,23 @@ class TheCouch(QWidget):
             sl.addWidget(QLabel(s))
         layout.addWidget(steps_frame)
 
-        # Persona dropdown
-        from .profile_store import list_personas, ensure_persona
-        for pn in ["supply-chain-exec", "procurement"]:
-            ensure_persona(pn)
-
+        # Persona dropdown — no hardcoded personas; the user creates them.
+        from .profile_store import list_personas
         self.persona_combo = QComboBox()
-        self.persona_combo.addItems(list_personas())
+        personas = list_personas()
+        if not personas:
+            self.persona_combo.addItem("(no personas yet — create one in the picker)")
+        else:
+            self.persona_combo.addItems(personas)
         layout.addWidget(QLabel("Active persona:"))
         layout.addWidget(self.persona_combo)
+        self._persona_hint = QLabel(
+            "Create a persona on the left (click '+ New persona'). "
+            "Then come back here, select it, and start setting parameters."
+        )
+        self._persona_hint.setWordWrap(True)
+        self._persona_hint.setStyleSheet("color: #666; padding: 4px; font-style: italic;")
+        layout.addWidget(self._persona_hint)
 
         cta = QPushButton("☕ Set up the Couch")
         cta.setStyleSheet("background: #b48a3a; color: white; font-size: 16px; padding: 10px; border-radius: 6px;")

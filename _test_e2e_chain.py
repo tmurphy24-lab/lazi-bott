@@ -30,10 +30,20 @@ def check(name, cond, detail=""):
 # === Setup: simulate a user uploading a resume ===
 
 print("AC21: end-to-end resume -> profile -> params chain")
-from app.profile_store import Persona, ensure_persona
+from app.profile_store import Persona, create_persona
 from app.resume_parser import profile_from_resume
 
-p = ensure_persona("supply-chain-exec")
+# User creates the persona with their own config (no hardcoded values)
+p = create_persona("supply-chain-exec", config={
+    "titles": ["Director of Supply Chain"],
+    "location": "United States",
+    "salary_min": 120000,
+    "salary_max": 250000,
+    "experience_years_min": 10,
+    "experience_years_max": 25,
+    "blacklist_companies": ["Crossover", "Jobot"],
+    "blacklist_titles": ["Junior", "Intern"],
+})
 resume_path = Path("sample_resume.txt").resolve()
 parsed = profile_from_resume(resume_path)
 p.update_profile(
@@ -56,6 +66,9 @@ app = QApplication.instance() or QApplication(sys.argv)
 from app.main import SearchableParameterEditor
 from app.profile_store import PARAM_SCHEMA
 
+# ensure_persona creates a fresh empty placeholder if the one above was deleted
+from app.profile_store import ensure_persona
+ensure_persona("supply-chain-exec")
 editor = SearchableParameterEditor("supply-chain-exec")
 cfg = editor._cfg
 check("editor loads salary_min from config",   cfg["salary_min"] in (120000, 150000))

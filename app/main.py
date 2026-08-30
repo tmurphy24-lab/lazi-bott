@@ -75,16 +75,20 @@ class PersonaPicker(QMainWindow):
         title.setStyleSheet("font-size: 18px; font-weight: bold; padding: 8px;")
         ll.addWidget(title)
 
-        # ensure defaults
-        for pn in ["supply-chain-exec", "procurement"]:
-            ensure_persona(pn)
-
+        # No hardcoded personas — the user enters their own.
         self.list_widget = QListWidget()
         self.list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
-        for name in list_personas():
-            item = QListWidgetItem(self._display_name(name))
-            item.setData(Qt.UserRole, name)
-            self.list_widget.addItem(item)
+
+        # Empty-state hint when no personas exist (create BEFORE refresh)
+        self.empty_hint = QLabel(
+            "👋 No personas yet. Click '+ New persona' to create one.\n"
+            "After you create it, your settings are saved and reused forever."
+        )
+        self.empty_hint.setWordWrap(True)
+        self.empty_hint.setStyleSheet("color: #666; padding: 12px; font-style: italic;")
+        ll.addWidget(self.empty_hint)
+
+        self._refresh_persona_list()
         self.list_widget.itemDoubleClicked.connect(self._on_double_click)
         ll.addWidget(self.list_widget, stretch=1)
 
@@ -94,8 +98,11 @@ class PersonaPicker(QMainWindow):
         select_btn.clicked.connect(self._on_select_clicked)
         new_btn = QPushButton("+ New persona")
         new_btn.clicked.connect(self._new_persona)
+        del_btn = QPushButton("🗑 Delete")
+        del_btn.clicked.connect(self._delete_persona)
         btn_row.addWidget(select_btn)
         btn_row.addWidget(new_btn)
+        btn_row.addWidget(del_btn)
         ll.addLayout(btn_row)
 
         layout.addWidget(left, stretch=1)
@@ -114,10 +121,20 @@ class PersonaPicker(QMainWindow):
         self.setCentralWidget(central)
 
     def _display_name(self, name: str) -> str:
-        return {
-            "supply-chain-exec": "Supply Chain Executive",
-            "procurement":       "Procurement & Supplier Fulfillment",
-        }.get(name, name.replace("-", " ").title())
+        # No hardcoded display names — just humanize the directory name.
+        return name.replace("-", " ").replace("_", " ").title()
+
+    def _refresh_persona_list(self):
+        self.list_widget.clear()
+        for name in list_personas():
+            item = QListWidgetItem(self._display_name(name))
+            item.setData(Qt.UserRole, name)
+            self.list_widget.addItem(item)
+        self._update_empty_hint()
+
+    def _update_empty_hint(self):
+        has = self.list_widget.count() > 0
+        self.empty_hint.setVisible(not has)
 
     def _on_select_clicked(self):
         item = self.list_widget.currentItem()
@@ -130,14 +147,56 @@ class PersonaPicker(QMainWindow):
         self.persona_chosen.emit(item.data(Qt.UserRole))
 
     def _new_persona(self):
-        name, ok = QInputDialog_getText(self, "New persona", "Persona name (no spaces, lowercase):")
+        from .profile_store import create_persona
+        name, ok = QInputDialog_getText(
+            self, "Create persona",
+            "Persona name (no spaces, lowercase):\n"
+            "e.g. 'supply-chain-exec', 'procurement', 'data-scientist'"
+        )
         if not ok or not name:
             return
-        name = name.strip().lower().replace(" ", "-")
-        ensure_persona(name)
+        name = name.strip().lower().replace(" ", "-").replace("_", "-")
+        if not name:
+            return
+        from pathlib import Path
+        existing = list_personas()
+        if name in existing:
+            QMessageBox.warning(self, "Create persona", f"Persona '{name}' already exists.")
+            return
+        # Create with empty config — user fills in everything in the GUI
+        create_persona(name, config={
+            "titles": [],
+            "location": "United States",
+            "salary_min": 0,
+            "salary_max": 0,
+        })
         item = QListWidgetItem(self._display_name(name))
         item.setData(Qt.UserRole, name)
         self.list_widget.addItem(item)
+        self.list_widget.setCurrentItem(item)
+        self._update_empty_hint()
+        QMessageBox.information(
+            self, "Persona created",
+            f"Persona '{name}' created with empty defaults.\n\n"
+            "After you select it, the next screen lets you set titles, "
+            "salary range, experience years, blacklist, and upload a resume."
+        )
+
+    def _delete_persona(self):
+        from .profile_store import delete_persona
+        item = self.list_widget.currentItem()
+        if not item:
+            QMessageBox.information(self, "Delete", "Select a persona to delete.")
+            return
+        name = item.data(Qt.UserRole)
+        if QMessageBox.question(
+            self, "Delete persona",
+            f"Delete persona '{name}' and all its files?\n(This cannot be undone.)"
+        ) != QMessageBox.Yes:
+            return
+        if delete_persona(name):
+            self.list_widget.takeItem(self.list_widget.row(item))
+            self._update_empty_hint()
 
     def _couch_ready(self):
         item = self.list_widget.currentItem()
