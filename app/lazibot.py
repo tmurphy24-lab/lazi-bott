@@ -35,6 +35,13 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QFileDialog, QGroupBox
 )
 
+# Design system tokens
+from app.ui_kit import (
+    SPACING, TYPE, SHADOWS, LaziColors,
+    Card, EmptyState, StatusBadge, SectionHeader, StatBlock,
+    IconLabel, Divider, Toolbar, Toast, apply_shadow,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -306,50 +313,59 @@ class LaziDock(QWidget):
         self.setFixedHeight(110)
 
     def _build_ui(self):
+        # Dock layout uses design-system spacing tokens (no hardcoded px).
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 4, 8, 4)
-        layout.setSpacing(8)
+        layout.setContentsMargins(SPACING["md"], SPACING["xs"], SPACING["md"], SPACING["xs"])
+        layout.setSpacing(SPACING["md"])
+
+        # Raised dock surface using design tokens + soft top shadow so it reads as elevated.
+        self.setStyleSheet(
+            f"QWidget {{ background: {LaziColors.COUCH_BG_RAISED}; border-top: 1px solid {LaziColors.COUCH_BORDER}; }}"
+            f"QLineEdit {{ background: {LaziColors.COUCH_BG}; color: {LaziColors.COUCH_TEXT}; }}"
+            f"QLineEdit:focus {{ border: 2px solid {LaziColors.COUCH_ACCENT_DK}; border-radius: 8px; padding: 6px; }}"
+        )
+        apply_shadow(self, level="md")  # raised-on-page shadow
 
         # Avatar circle on the left (the dirty little guy)
         self.avatar = QLabel("LAZI")
         self.avatar.setFixedSize(56, 56)
         self.avatar.setAlignment(Qt.AlignCenter)
         self.avatar.setStyleSheet(
-            "background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #c9a96e, stop:1 #a07a3a);"
-            "color: #3a2410; font-weight: bold; font-size: 14px;"
-            "border-radius: 28px; border: 2px solid #6b4a1a;"
+            f"background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 {LaziColors.COUCH_CUSHION}, stop:1 {LaziColors.COUCH_CUSHION_DK});"
+            f"color: {LaziColors.COUCH_TEXT}; font-weight: 700; font-size: 14px;"
+            f"border-radius: 28px; border: 2px solid {LaziColors.COUCH_ACCENT_DK};"
         )
-        # drop shadow
-        shadow = QGraphicsDropShadowEffect(self.avatar)
-        shadow.setBlurRadius(8)
-        shadow.setColor(QColor(0, 0, 0, 80))
-        shadow.setOffset(0, 2)
-        self.avatar.setGraphicsEffect(shadow)
+        # Avatar gets its own focused drop shadow
+        av_shadow = QGraphicsDropShadowEffect(self.avatar)
+        av_shadow.setBlurRadius(12)
+        av_shadow.setColor(QColor(60, 30, 0, 100))
+        av_shadow.setOffset(0, 2)
+        self.avatar.setGraphicsEffect(av_shadow)
         layout.addWidget(self.avatar)
 
         # Scrollable message area
         self._chat_list = QTextEdit()
         self._chat_list.setReadOnly(True)
         self._chat_list.setStyleSheet(
-            "QTextEdit { background: #fff8e7; border: 2px solid #b48a3a; border-radius: 12px;"
-            "padding: 6px; color: #3a2410; font-family: 'Comic Sans MS', sans-serif; font-size: 12px; }"
+            f"QTextEdit {{ background: {LaziColors.COUCH_BG}; border: 1px solid {LaziColors.COUCH_BORDER}; border-radius: 10px;"
+            f"padding: 8px; color: {LaziColors.COUCH_TEXT}; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px; }}"
         )
         self._chat_list.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         layout.addWidget(self._chat_list, stretch=1)
 
         # Input area (vertical: entry + send button)
         right = QVBoxLayout()
+        right.setSpacing(SPACING["xs"])
         self._entry = QLineEdit()
         self._entry.setPlaceholderText("Tell Lazi what you need, chief…  (Enter to send)")
         self._entry.returnPressed.connect(self._send)
         self._entry.setStyleSheet(
-            "QLineEdit { background: white; border: 2px solid #b48a3a; border-radius: 8px; padding: 6px; font-size: 13px; }"
-            "QLineEdit:focus { border-color: #6b4a1a; }"
+            f"QLineEdit {{ background: {LaziColors.COUCH_BG_RAISED}; border: 1px solid {LaziColors.COUCH_BORDER}; border-radius: 8px; padding: 6px 8px; font-size: 13px; color: {LaziColors.COUCH_TEXT}; }}"
+            f"QLineEdit:focus {{ border: 2px solid {LaziColors.COUCH_ACCENT}; padding: 5px 7px; }}"
         )
         self._send_btn = QPushButton("Send")
-        self._send_btn.setStyleSheet(
-            "background: #b48a3a; color: white; font-weight: bold; padding: 6px 12px; border-radius: 6px;"
-        )
+        self._send_btn.setProperty("variant", "primary")
+        self._send_btn.setToolTip("Send (Enter)")
         self._send_btn.clicked.connect(self._send)
         right.addWidget(self._entry)
         right.addWidget(self._send_btn)
@@ -719,25 +735,43 @@ class JobTrackerPage(QWidget):
         super().__init__(parent)
         self.persona_name = persona_name or ""
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # Toolbar
-        bar = QHBoxLayout()
+        # Toolbar (design system)
+        bar = Toolbar("Job tracker")
         self.filter_edit = QLineEdit()
-        self.filter_edit.setPlaceholderText("Filter by title or company…")
-        bar.addWidget(self.filter_edit)
+        self.filter_edit.setPlaceholderText("🔍  Filter by title or company…")
+        self.filter_edit.setMaximumWidth(320)
+        self.filter_edit.textChanged.connect(self._refresh)
+        bar.add_left(self.filter_edit)
         refresh = QPushButton("↻ Refresh")
+        refresh.setProperty("variant", "ghost")
+        refresh.setToolTip("Refresh list")
         refresh.clicked.connect(self._refresh)
-        bar.addWidget(refresh)
+        bar.add_right(refresh)
         export_btn = QPushButton("⬇ Export CSV")
+        export_btn.setProperty("variant", "primary")
+        export_btn.setToolTip("Export to CSV")
         export_btn.clicked.connect(self._export)
-        bar.addWidget(export_btn)
-        layout.addLayout(bar)
+        bar.add_right(export_btn)
+        layout.addWidget(bar)
 
-        # Table
+        # Stacked: table on top, empty state when no data
+        self.stack = QStackedWidget()
         self.table = QTableWidget()
         self.table.setColumnCount(5)
         self.table.setHorizontalHeaderLabels(["Title", "Company", "Status", "Applied", "Engine"])
-        layout.addWidget(self.table, stretch=1)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setVisible(False)
+        self.stack.addWidget(self.table)
+        self.empty = EmptyState(
+            icon="📭",
+            title="No applications yet",
+            body="Run a search to start applying. Every successful and failed application will show up here.",
+        )
+        self.stack.addWidget(self.empty)
+        layout.addWidget(self.stack, stretch=1)
         self._refresh()
 
     def _refresh(self):
@@ -745,13 +779,22 @@ class JobTrackerPage(QWidget):
         f = self.filter_edit.text().strip().lower() if hasattr(self, "filter_edit") else ""
         if f:
             apps = [a for a in apps if f in a.title.lower() or f in a.company.lower()]
+        if not apps:
+            self.stack.setCurrentWidget(self.empty)
+            self.table.setRowCount(0)
+            return
+        self.stack.setCurrentWidget(self.table)
         self.table.setRowCount(len(apps))
         for row, a in enumerate(apps):
             self.table.setItem(row, 0, QTableWidgetItem(a.title))
             self.table.setItem(row, 1, QTableWidgetItem(a.company))
-            self.table.setItem(row, 2, QTableWidgetItem(a.status))
+            # status with colored badge
+            badge = StatusBadge(a.status, level="success" if a.status == "applied" else "warn" if a.status == "failed" else "info")
+            self.table.setCellWidget(row, 2, badge)
             self.table.setItem(row, 3, QTableWidgetItem(a.applied_at[:10]))
             self.table.setItem(row, 4, QTableWidgetItem(a.engine))
+        self.table.resizeColumnsToContents()
+        self.table.horizontalHeader().setStretchLastSection(True)
 
     def _export(self):
         csv_text = export_csv(persona=self.persona_name or None)
@@ -771,25 +814,79 @@ class AnalyticsPage(QWidget):
         super().__init__(parent)
         self.persona_name = persona_name or None
         layout = QVBoxLayout(self)
-        self.stats_label = QLabel("")
-        self.stats_label.setStyleSheet("font-size: 14px; padding: 8px;")
-        layout.addWidget(self.stats_label)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # Toolbar
+        bar = Toolbar("Analytics")
+        refresh_btn = QPushButton("↻ Refresh")
+        refresh_btn.setProperty("variant", "ghost")
+        refresh_btn.clicked.connect(self._refresh)
+        bar.add_right(refresh_btn)
+        layout.addWidget(bar)
+
+        # Stacked: stats OR empty state
+        self.stack = QStackedWidget()
+        self.content = QWidget()
+        cl = QVBoxLayout(self.content)
+        cl.setContentsMargins(SPACING["lg"], SPACING["md"], SPACING["lg"], SPACING["lg"])
+        cl.setSpacing(SPACING["md"])
+
+        # Stat row (4 StatBlock cards)
+        self.stats_row = QHBoxLayout()
+        self.stats_row.setSpacing(SPACING["md"])
+        self.stat_total = StatBlock("0", "TOTAL")
+        self.stat_applied = StatBlock("0", "APPLIED")
+        self.stat_interview = StatBlock("0", "INTERVIEWS")
+        self.stat_offer = StatBlock("0", "OFFERS")
+        for w in (self.stat_total, self.stat_applied, self.stat_interview, self.stat_offer):
+            self.stats_row.addWidget(w)
+        self.stats_row.addStretch()
+        cl.addLayout(self.stats_row)
+
+        # Secondary stats: response rate, offer rate
+        secondary = QHBoxLayout()
+        secondary.setSpacing(SPACING["md"])
+        self.stat_resp = StatBlock("0%", "RESPONSE RATE")
+        self.stat_offer_rate = StatBlock("0%", "OFFER RATE")
+        secondary.addWidget(self.stat_resp)
+        secondary.addWidget(self.stat_offer_rate)
+        secondary.addStretch()
+        cl.addLayout(secondary)
+
+        Divider()
+        # detail text (by engine / by week / top companies)
+        detail_lbl = QLabel("Breakdown")
+        detail_lbl.setProperty("type", "h3")
+        detail_lbl.setContentsMargins(0, SPACING["md"], 0, SPACING["xs"])
+        cl.addWidget(detail_lbl)
         self.detail = QTextEdit()
         self.detail.setReadOnly(True)
-        layout.addWidget(self.detail, stretch=1)
+        cl.addWidget(self.detail, stretch=1)
+
+        self.stack.addWidget(self.content)
+        self.empty = EmptyState(
+            icon="📊",
+            title="No data yet",
+            body="Start applying to jobs and your analytics will appear here. Response rate, top companies, weekly trends — all of it.",
+        )
+        self.stack.addWidget(self.empty)
+        layout.addWidget(self.stack, stretch=1)
         self._refresh()
         QTimer.singleShot(0, self._refresh)
 
     def _refresh(self):
         s = compute_stats(persona=self.persona_name)
-        self.stats_label.setText(
-            f"<b>Total: {s.total}</b> &nbsp;|&nbsp; "
-            f"Applied: {s.applied} &nbsp;|&nbsp; "
-            f"Interviews: {s.interview} &nbsp;|&nbsp; "
-            f"Offers: {s.offer} &nbsp;|&nbsp; "
-            f"Response rate: {s.response_rate*100:.1f}% &nbsp;|&nbsp; "
-            f"Offer rate: {s.offer_rate*100:.1f}%"
-        )
+        if s.total == 0:
+            self.stack.setCurrentWidget(self.empty)
+            return
+        self.stack.setCurrentWidget(self.content)
+        self.stat_total.set_value(str(s.total))
+        self.stat_applied.set_value(str(s.applied))
+        self.stat_interview.set_value(str(s.interview))
+        self.stat_offer.set_value(str(s.offer))
+        self.stat_resp.set_value(f"{s.response_rate*100:.1f}%")
+        self.stat_offer_rate.set_value(f"{s.offer_rate*100:.1f}%")
         out = []
         out.append("=== By engine ===")
         for k, v in s.by_engine.items():
@@ -809,11 +906,22 @@ class SchedulerPage(QWidget):
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # Add form
+        # Toolbar
+        bar = Toolbar("Scheduler")
+        layout.addWidget(bar)
+
+        # Add form in a card
+        form_card = Card(title="Add a new schedule")
         form = QFormLayout()
+        form.setSpacing(SPACING["sm"])
+        form.setContentsMargins(0, 0, 0, 0)
         self.name_edit = QLineEdit()
+        self.name_edit.setPlaceholderText("e.g. morning-run")
         self.persona_edit = QLineEdit()
+        self.persona_edit.setPlaceholderText("e.g. supply-chain-exec")
         self.engine_combo = QComboBox()
         self.engine_combo.addItems(["easyapplyjobsbot","linkedin-aihawk",
                                      "auto-job-applier","linkedin-bot","job-apply-ai-agent"])
@@ -823,14 +931,25 @@ class SchedulerPage(QWidget):
         form.addRow("Persona:", self.persona_edit)
         form.addRow("Engine:", self.engine_combo)
         form.addRow("Cron expr:", self.cron_edit)
-        layout.addLayout(form)
-
+        form_card.add_layout(form)
         add_btn = QPushButton("+ Add schedule")
+        add_btn.setProperty("variant", "primary")
         add_btn.clicked.connect(self._add)
-        layout.addWidget(add_btn)
+        form_card.add_widget(add_btn)
+        layout.addWidget(form_card)
 
+        # Existing schedules — table or empty state
         self.list_widget = QListWidget()
+        self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.list_widget.customContextMenuRequested.connect(self._on_context_menu)
         layout.addWidget(self.list_widget, stretch=1)
+        self.empty = EmptyState(
+            icon="⏰",
+            title="No schedules yet",
+            body="Add a cron expression to fire off a run automatically. Right-click any schedule to toggle or delete it.",
+        )
+        self.empty.hide()
+        layout.addWidget(self.empty)
         self._refresh()
 
     def _add(self):
@@ -851,7 +970,8 @@ class SchedulerPage(QWidget):
 
     def _refresh(self):
         self.list_widget.clear()
-        for s in list_schedules():
+        schedules = list_schedules()
+        for s in schedules:
             nxt = next_run(s)
             nxt_str = nxt.isoformat() if nxt else "n/a"
             item = QListWidgetItem(
@@ -859,9 +979,12 @@ class SchedulerPage(QWidget):
             )
             item.setData(Qt.UserRole, s.name)
             self.list_widget.addItem(item)
+        has = bool(schedules)
+        self.list_widget.setVisible(has)
+        self.empty.setVisible(not has)
 
-    def contextMenuEvent(self, event):
-        item = self.list_widget.itemAt(event.pos())
+    def _on_context_menu(self, pos):
+        item = self.list_widget.itemAt(pos)
         if not item:
             return
         name = item.data(Qt.UserRole)
@@ -869,7 +992,7 @@ class SchedulerPage(QWidget):
         m = QMenu(self)
         m.addAction("Toggle enabled", lambda: self._toggle(name))
         m.addAction("Delete", lambda: self._delete(name))
-        m.exec(event.globalPos())
+        m.exec(self.list_widget.mapToGlobal(pos))
 
     def _toggle(self, name):
         for s in list_schedules():
@@ -890,45 +1013,73 @@ class AIAssistPage(QWidget):
         super().__init__(parent)
         self.persona = persona
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        # Toolbar
+        bar = Toolbar("AI Assist")
+        layout.addWidget(bar)
+
         if persona is None:
-            w = QLabel("Select a persona first to use AI Assist.")
-            w.setStyleSheet("color: #888; font-style: italic; padding: 16px;")
-            layout.addWidget(w)
+            self.empty = EmptyState(
+                icon="🤖",
+                title="Pick a persona to use AI Assist",
+                body="Cover letters, interview Q&A, follow-up emails, salary benchmarks, and resume tailoring all need your persona loaded.",
+            )
+            layout.addWidget(self.empty, stretch=1)
             return
 
+        content = QVBoxLayout()
+        content.setContentsMargins(SPACING["lg"], SPACING["md"], SPACING["lg"], SPACING["lg"])
+        content.setSpacing(SPACING["sm"])
+
         # Job description input (shared)
-        layout.addWidget(QLabel("Job description (paste or leave blank to demo):"))
+        jd_lbl = QLabel("Job description (paste or leave blank to demo):")
+        jd_lbl.setProperty("type", "med")
+        content.addWidget(jd_lbl)
         self.jd_edit = QTextEdit()
         self.jd_edit.setPlaceholderText("Paste a LinkedIn job description here, or describe the role briefly…")
         self.jd_edit.setMaximumHeight(120)
-        layout.addWidget(self.jd_edit)
+        content.addWidget(self.jd_edit)
 
-        layout.addWidget(QLabel("Job title:"))
+        title_lbl = QLabel("Job title:")
+        title_lbl.setProperty("type", "med")
+        content.addWidget(title_lbl)
         self.title_edit = QLineEdit()
-        layout.addWidget(self.title_edit)
+        self.title_edit.setPlaceholderText("e.g. Senior Supply Chain Manager")
+        content.addWidget(self.title_edit)
 
-        layout.addWidget(QLabel("Company:"))
+        company_lbl = QLabel("Company:")
+        company_lbl.setProperty("type", "med")
+        content.addWidget(company_lbl)
         self.company_edit = QLineEdit()
-        layout.addWidget(self.company_edit)
+        self.company_edit.setPlaceholderText("e.g. Acme Corp")
+        content.addWidget(self.company_edit)
 
-        # Buttons
+        # Buttons (grid of actions)
         btn_row = QHBoxLayout()
+        btn_row.setSpacing(SPACING["sm"])
         for label, fn in [
-            ("📝 Cover letter",  self._cover_letter),
-            ("🎤 Interview Q&A",  self._interview),
-            ("✉ Follow-up email", self._followup),
+            ("📝 Cover letter",     self._cover_letter),
+            ("🎤 Interview Q&A",    self._interview),
+            ("✉ Follow-up email",   self._followup),
             ("💰 Salary benchmark", self._salary),
-            ("📋 Tailor resume", self._tailor),
+            ("📋 Tailor resume",    self._tailor),
         ]:
             b = QPushButton(label)
+            b.setProperty("variant", "primary")
             b.clicked.connect(fn)
             btn_row.addWidget(b)
-        layout.addLayout(btn_row)
+        content.addLayout(btn_row)
 
-        # Output
+        # Output (with its own header)
+        out_lbl = QLabel("Output")
+        out_lbl.setProperty("type", "h3")
+        out_lbl.setContentsMargins(0, SPACING["md"], 0, SPACING["xs"])
+        content.addWidget(out_lbl)
         self.output = QTextEdit()
         self.output.setReadOnly(True)
-        layout.addWidget(self.output, stretch=2)
+        content.addWidget(self.output, stretch=2)
+        layout.addLayout(content, stretch=1)
 
     def _job(self) -> dict:
         return {

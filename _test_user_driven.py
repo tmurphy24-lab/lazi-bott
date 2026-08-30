@@ -117,8 +117,8 @@ win = PersonaPicker(controller, brain)
 check("PersonaPicker has empty persona list on first run",
       win.list_widget.count() == 0,
       f"got {win.list_widget.count()} personas")
-check("PersonaPicker shows the empty-state hint on first run",
-      not win.empty_hint.isHidden())
+check("PersonaPicker shows the EmptyState on first run",
+      not win.empty_state.isHidden())
 
 couch = TheCouch()
 check("TheCouch persona_combo shows empty-state on first run",

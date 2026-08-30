@@ -44,7 +44,8 @@ from app.lazibot import LaziBrain, LaziChatOverlay, LaziDock, TheCouch, WelcomeS
 from app.browser_widget import BrowserWidget
 from app.ui_kit import (
     LaziColors, apply_app_theme, ToastManager, Toast, Card, SectionHeader,
-    EmptyState, StatusBadge,
+    EmptyState, StatusBadge, StatBlock, IconLabel, Divider, Toolbar,
+    SPACING, SHADOWS,
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -156,11 +157,13 @@ class ProfileSubPage(QWidget):
         rform.addRow("Status:", self.resume_status)
         btn_row = QHBoxLayout()
         b1 = QPushButton("Browse…")
+        b1.setProperty("variant", "ghost")
         b1.clicked.connect(self._browse_resume)
         b2 = QPushButton("Parse → Profile")
+        b2.setProperty("variant", "ghost")
         b2.clicked.connect(self._parse_resume_to_profile)
         b3 = QPushButton("Save")
-        b3.setStyleSheet("background: #2a7a2a; color: white;")
+        b3.setProperty("variant", "primary")
         b3.clicked.connect(self._save)
         btn_row.addWidget(b1)
         btn_row.addWidget(b2)
@@ -176,6 +179,11 @@ class ProfileSubPage(QWidget):
         outer.addWidget(info_card)
         outer.addWidget(resume_card)
         outer.addStretch()
+
+    def focus_first_input(self):
+        """Focus the first field — called by parent when this page becomes current."""
+        self.pi_first.setFocus()
+        self.pi_first.selectAll()
 
     def _browse_resume(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -289,6 +297,11 @@ class SearchSubPage(QWidget):
         outer.addWidget(params_card)
         outer.addStretch()
 
+    def focus_first_input(self):
+        """Focus the search bar — called by parent when this page becomes current."""
+        self.search.setFocus()
+        self.search.selectAll()
+
     def _filter(self, q: str):
         # delegate to the editor's own filter
         self._editor._filter(q)
@@ -318,8 +331,10 @@ class BlacklistSubPage(QWidget):
         self.co_edit.setPlaceholderText("Company name (e.g. SpamCo, StaffingRUs)")
         co_row.addWidget(self.co_edit)
         add = QPushButton("Add")
+        add.setProperty("variant", "primary")
         add.clicked.connect(self._add_company)
         rem = QPushButton("Remove")
+        rem.setProperty("variant", "ghost")
         rem.clicked.connect(lambda: self._add_company(remove=True))
         co_row.addWidget(add)
         co_row.addWidget(rem)
@@ -335,8 +350,10 @@ class BlacklistSubPage(QWidget):
         self.ti_edit.setPlaceholderText("Title keyword (e.g. Junior, Intern, Recruiter)")
         ti_row.addWidget(self.ti_edit)
         add2 = QPushButton("Add")
+        add2.setProperty("variant", "primary")
         add2.clicked.connect(self._add_title)
         rem2 = QPushButton("Remove")
+        rem2.setProperty("variant", "ghost")
         rem2.clicked.connect(lambda: self._add_title(remove=True))
         ti_row.addWidget(add2)
         ti_row.addWidget(rem2)
@@ -345,6 +362,10 @@ class BlacklistSubPage(QWidget):
         ti_card.body.addWidget(self.ti_list, stretch=1)
         outer.addWidget(ti_card)
         outer.addStretch()
+
+    def focus_first_input(self):
+        """Focus the first input — called by parent when this page becomes current."""
+        self.co_edit.setFocus()
 
     def _refresh(self):
         cfg = self.persona.load_config()
@@ -425,12 +446,12 @@ class RunSubPage(QWidget):
 
         outer.addWidget(run_card)
 
-        # Start button
+        # Start button (primary variant — uses design-system accent)
         self.start_btn = QPushButton("🚀  Start run")
-        self.start_btn.setStyleSheet(
-            "background: #2a7a2a; color: white; font-size: 18px; "
-            "font-weight: bold; padding: 14px; border-radius: 8px;"
-        )
+        self.start_btn.setProperty("variant", "primary")
+        self.start_btn.setMinimumHeight(48)
+        self.start_btn.setToolTip("Start the bot run (Enter)")
+        self.start_btn.setDefault(True)
         self.start_btn.clicked.connect(self._start)
         outer.addWidget(self.start_btn)
 
@@ -447,6 +468,10 @@ class RunSubPage(QWidget):
 
         outer.addWidget(test_card)
         outer.addStretch()
+
+    def focus_first_input(self):
+        """Focus the first interactive control — called by parent when this page becomes current."""
+        self.start_btn.setFocus()
 
     def _on_provider_changed(self):
         provider = self.provider_combo.currentText()
@@ -507,50 +532,59 @@ class RunConfig(QMainWindow):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        # LEFT: sidebar nav
+        # LEFT: sidebar nav (using proper spacing + active state)
         sidebar = QWidget()
-        sidebar.setFixedWidth(200)
-        sidebar.setStyleSheet(
-            "background: #f0e2c0; border-right: 2px solid #b48a3a;"
-        )
+        sidebar.setFixedWidth(220)
+        sidebar.setObjectName("sidebar")
         sbl = QVBoxLayout(sidebar)
-        sbl.setContentsMargins(0, 8, 0, 8)
-        sbl.setSpacing(4)
-        title = QLabel("📋 CONFIG")
-        title.setStyleSheet("font-size: 14px; font-weight: bold; color: #6b4a1a; padding: 8px;")
-        sbl.addWidget(title)
+        sbl.setContentsMargins(0, SPACING["sm"], 0, SPACING["sm"])
+        sbl.setSpacing(0)
+        # header
+        header_lbl = QLabel("📋  CONFIG")
+        header_lbl.setProperty("type", "caption")
+        header_lbl.setContentsMargins(SPACING["lg"], SPACING["sm"], SPACING["lg"], SPACING["sm"])
+        sbl.addWidget(header_lbl)
+        sbl.addWidget(Divider())
+
+        # nav buttons (icon + label, proper active state)
         self.nav_buttons: List[QPushButton] = []
-        for idx, (icon, label) in enumerate([
-            ("👤", "Profile"),
-            ("🎯", "Search"),
-            ("🚫", "Blacklist"),
-            ("🚀", "Run"),
-        ]):
-            btn = QPushButton(f"{icon}  {label}")
+        NAV_ITEMS = [
+            ("👤", "Profile",   "Ctrl+1"),
+            ("🎯", "Search",    "Ctrl+2"),
+            ("🚫", "Blacklist", "Ctrl+3"),
+            ("🚀", "Run",       "Ctrl+4"),
+        ]
+        nav_holder = QWidget()
+        nav_layout = QVBoxLayout(nav_holder)
+        nav_layout.setContentsMargins(0, SPACING["sm"], 0, SPACING["sm"])
+        nav_layout.setSpacing(2)
+        for idx, (icon, label, hint) in enumerate(NAV_ITEMS):
+            btn = QPushButton(f"  {icon}   {label}")
             btn.setCheckable(True)
-            btn.setStyleSheet(
-                "QPushButton { background: transparent; color: #3a2410; "
-                "text-align: left; padding: 12px 16px; font-size: 14px; "
-                "border: none; border-left: 4px solid transparent; }"
-                "QPushButton:hover { background: #f5e7c0; }"
-                "QPushButton:checked { background: #fff8e7; "
-                "border-left: 4px solid #b48a3a; font-weight: bold; }"
-            )
+            btn.setToolTip(f"{label}  ({hint})")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setMinimumHeight(44)
+            btn.setProperty("nav", "true")
             btn.clicked.connect(lambda _, i=idx: self._switch_page(i))
-            sbl.addWidget(btn)
+            nav_layout.addWidget(btn)
             self.nav_buttons.append(btn)
+        sbl.addWidget(nav_holder)
+
         sbl.addStretch()
-        # persona name + change button
-        pn_box = QVBoxLayout()
-        pn = QLabel(f"👤 {self.persona_name}")
-        pn.setStyleSheet("color: #3a2410; font-weight: bold; padding: 8px;")
-        pn.setWordWrap(True)
-        pn_box.addWidget(pn)
+        sbl.addWidget(Divider())
+
+        # persona footer
+        persona_footer = QWidget()
+        pf = QVBoxLayout(persona_footer)
+        pf.setContentsMargins(SPACING["md"], SPACING["md"], SPACING["md"], SPACING["md"])
+        pf.setSpacing(SPACING["xs"])
+        pn = IconLabel("👤", self.persona_name.replace("-", " ").title(), size=14)
+        pf.addWidget(pn)
         switch = QPushButton("Change persona…")
-        switch.setStyleSheet("background: #b48a3a; color: white; padding: 6px;")
+        switch.setProperty("variant", "ghost")
         switch.clicked.connect(self._change_persona)
-        pn_box.addWidget(switch)
-        sbl.addLayout(pn_box)
+        pf.addWidget(switch)
+        sbl.addWidget(persona_footer)
         outer.addWidget(sidebar)
 
         # RIGHT: stacked sub-pages
@@ -594,6 +628,13 @@ class RunConfig(QMainWindow):
         for i, b in enumerate(self.nav_buttons):
             b.setChecked(i == idx)
         self.stack.setCurrentIndex(idx)
+        # Focus management: each sub-page exposes focus_first_input() that
+        # moves focus to its primary input. Deferred so the stack is settled.
+        pages = [self.profile_page, self.search_page, self.blacklist_pg, self.run_page]
+        if 0 <= idx < len(pages):
+            page = pages[idx]
+            if hasattr(page, "focus_first_input"):
+                QTimer.singleShot(0, page.focus_first_input)
 
     def _save_active(self):
         # save whatever the current sub-page cares about
@@ -911,40 +952,64 @@ class PersonaPicker(QMainWindow):
         central = QWidget()
         layout = QHBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # left: persona list
+        # left: persona list with a proper toolbar + empty state
         left = QWidget()
         ll = QVBoxLayout(left)
-        title = QLabel("Personas")
-        title.setStyleSheet("font-size: 20px; font-weight: bold; padding: 8px;")
-        ll.addWidget(title)
+        ll.setContentsMargins(0, 0, 0, 0)
+        ll.setSpacing(0)
+
+        # toolbar with title + New button
+        toolbar = Toolbar("Personas")
+        toolbar.add_right(self._make_toolbar_btn("➕ New", "Ctrl+N", self._new_persona, variant="primary"))
+        ll.addWidget(toolbar)
+
+        # stat block + divider
+        stats_row = QWidget()
+        sl = QHBoxLayout(stats_row)
+        sl.setContentsMargins(SPACING["lg"], SPACING["md"], SPACING["lg"], SPACING["md"])
+        sl.setSpacing(SPACING["lg"])
+        self.stat_count = StatBlock("0", "personas")
+        self.stat_jobs = StatBlock("0", "applied")
+        sl.addWidget(self.stat_count)
+        sl.addWidget(self.stat_jobs)
+        sl.addStretch()
+        ll.addWidget(stats_row)
+        ll.addWidget(Divider())
+
+        # the actual list (or EmptyState)
         self.list_widget = QListWidget()
         self.list_widget.setSelectionMode(QAbstractItemView.SingleSelection)
         self.list_widget.itemDoubleClicked.connect(self._on_double_click)
         ll.addWidget(self.list_widget, stretch=1)
 
-        # buttons row
-        btn_row = QHBoxLayout()
-        select = QPushButton("Select ▶")
-        select.setStyleSheet("background: #2a7a2a; color: white; padding: 8px;")
-        select.clicked.connect(self._on_select_clicked)
-        new = QPushButton("➕ New (Ctrl+N)")
-        new.clicked.connect(self._new_persona)
-        delete = QPushButton("🗑 Delete")
-        delete.clicked.connect(self._delete_persona)
-        btn_row.addWidget(select)
-        btn_row.addWidget(new)
-        btn_row.addWidget(delete)
-        ll.addLayout(btn_row)
-        # empty-state hint (shown when no personas exist)
-        self.empty_hint = QLabel(
-            "👋 No personas yet.\n"
-            "Click '➕ New (Ctrl+N)' to create one."
+        # EmptyState (shown when no personas) — big illustration + bigger CTA
+        self.empty_state = EmptyState(
+            icon="👋",
+            title="No personas yet",
+            body="Create your first persona to start applying for jobs. "
+                 "Each persona has its own titles, salary range, resume, and blacklist.",
+            action_text="➕  Create your first persona",
+            on_action=self._new_persona,
+            big_cta=True,
         )
-        self.empty_hint.setWordWrap(True)
-        self.empty_hint.setStyleSheet("color: #7a5a2a; padding: 12px; font-style: italic;")
-        self.empty_hint.setAlignment(Qt.AlignCenter)
-        ll.addWidget(self.empty_hint)
+        self.empty_state.hide()
+        ll.addWidget(self.empty_state)
+
+        # action buttons at bottom
+        bottom = QWidget()
+        bottom.setStyleSheet("QWidget { background: palette(window); border-top: 1px solid palette(midlight); }")
+        bl = QHBoxLayout(bottom)
+        bl.setContentsMargins(SPACING["md"], SPACING["sm"], SPACING["md"], SPACING["sm"])
+        bl.setSpacing(SPACING["sm"])
+        select = self._make_toolbar_btn("▶ Select", "Enter", self._on_select_clicked, variant="primary")
+        delete = self._make_toolbar_btn("🗑 Delete", "Del", self._delete_persona, variant="ghost")
+        bl.addWidget(select)
+        bl.addStretch()
+        bl.addWidget(delete)
+        ll.addWidget(bottom)
+
         layout.addWidget(left, stretch=1)
 
         # right: The Couch
@@ -962,7 +1027,6 @@ class PersonaPicker(QMainWindow):
 
         self.setCentralWidget(central)
         self._refresh_persona_list()
-        self._update_empty_hint()
 
     def _install_shortcuts(self):
         QShortcut(QKeySequence("Ctrl+N"), self, activated=self._new_persona)
@@ -992,6 +1056,14 @@ class PersonaPicker(QMainWindow):
                 return
         self.controller.toast(self, "Settings tab not found in this Couch version.", level="warn")
 
+    def _make_toolbar_btn(self, text: str, hint: str, slot, variant: str = "") -> QPushButton:
+        b = QPushButton(text)
+        b.setToolTip(f"{text}  ({hint})" if hint else text)
+        b.clicked.connect(slot)
+        if variant:
+            b.setProperty("variant", variant)
+        return b
+
     def _refresh_persona_list(self):
         self.list_widget.clear()
         for name in list_personas():
@@ -999,13 +1071,24 @@ class PersonaPicker(QMainWindow):
             item = QListWidgetItem(display)
             item.setData(Qt.UserRole, name)
             self.list_widget.addItem(item)
-        self._update_empty_hint()
+        # toggle empty state vs list
+        has = self.list_widget.count() > 0
+        self.list_widget.setVisible(has)
+        self.empty_state.setVisible(not has)
+        # update stat block
+        n = len(list_personas())
+        self.stat_count.set_value(str(n))
+        # applied count from job tracker
+        try:
+            from app.job_tracker import list_applications
+            n_jobs = len(list_applications())
+        except Exception:
+            n_jobs = 0
+        self.stat_jobs.set_value(str(n_jobs))
 
     def _update_empty_hint(self):
-        if not hasattr(self, "empty_hint"):
-            return
-        has = self.list_widget.count() > 0
-        self.empty_hint.setVisible(not has)
+        # Kept for back-compat; now delegates to _refresh_persona_list
+        self._refresh_persona_list()
 
     def _on_select_clicked(self):
         item = self.list_widget.currentItem()

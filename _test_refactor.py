@@ -76,8 +76,8 @@ brain = LaziBrain()
 win = PersonaPicker(controller, brain)
 check("PersonaPicker has 4 buttons (Select, New, Delete, +sidebar hint)",
       win.list_widget.count() == 0)
-check("PersonaPicker empty_hint is visible when no personas",
-      not win.empty_hint.isHidden())
+check("PersonaPicker EmptyState is visible when no personas",
+      not win.empty_state.isHidden())
 check("PersonaPicker tracked in controller.windows",
       win in controller._windows)
 
