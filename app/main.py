@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
     QLabel, QPushButton, QComboBox, QTextEdit, QTableWidget, QTableWidgetItem,
     QMessageBox, QFrame, QDialog, QFormLayout, QCheckBox, QSpinBox,
     QLineEdit, QFileDialog, QGroupBox, QListWidget, QListWidgetItem,
-    QAbstractItemView, QSplitter,
+    QAbstractItemView, QSplitter, QDockWidget,
 )
 
 from app.profile_store import (
@@ -39,7 +39,7 @@ from app.profile_store import (
 from app.bot_runner import ENGINES, run, RunResult
 from app.resume_parser import profile_from_resume
 from app.auto_filler import answer_form
-from app.lazibot import LaziBrain, LaziChatOverlay, TheCouch, PasswordVaultWidget
+from app.lazibot import LaziBrain, LaziChatOverlay, LaziDock, TheCouch, PasswordVaultWidget, WelcomeSplash
 from app.browser_widget import BrowserWidget
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -112,11 +112,15 @@ class PersonaPicker(QMainWindow):
         self.couch.ready.connect(self._couch_ready)
         layout.addWidget(self.couch, stretch=2)
 
-        # Lazi overlay
+        # Lazi bottom dock (ChatGPT-style, always visible)
         self.brain = LaziBrain(self)
+        self.lazi_dock = LaziDock(self, brain=self.brain)
+        layout.addWidget(self.lazi_dock)
+
+        # Optional floating overlay (kept for back-compat)
         self.lazi = LaziChatOverlay(self, brain=self.brain)
         self.lazi.command.connect(self._on_lazi_command)
-        QTimer.singleShot(100, self._position_lazi)
+        self.lazi.hide()  # docked version is the primary UI
 
         self.setCentralWidget(central)
 
@@ -376,10 +380,13 @@ class RunConfig(QMainWindow):
         self.start_btn.clicked.connect(self._start)
         layout.addWidget(self.start_btn)
 
-        # Lazi overlay
+        # Lazi bottom dock (ChatGPT-style)
+        self.lazi_dock = LaziDock(self, brain=self.brain)
+        layout.addWidget(self.lazi_dock)
+        # Legacy overlay (hidden, kept for back-compat)
         self.lazi = LaziChatOverlay(self, brain=self.brain)
         self.lazi.command.connect(lambda k, v: self.param_editor.set_param(k, v))
-        QTimer.singleShot(100, self._position_lazi)
+        self.lazi.hide()
 
         self.setCentralWidget(central)
         self._on_provider_changed()
@@ -703,23 +710,23 @@ class RunView(QMainWindow):
 
         self.setCentralWidget(central)
 
-        # Lazi overlay
+        # Lazi bottom dock (ChatGPT-style)
+        self.lazi_dock = LaziDock(self, brain=self.brain)
+        # No central layout for RunView — it's a QMainWindow, so dock at the bottom
+        from PySide6.QtWidgets import QDockWidget
+        self.lazi_dock_widget = QDockWidget("Lazi — bottom dock", self)
+        self.lazi_dock_widget.setWidget(self.lazi_dock)
+        self.lazi_dock_widget.setFeatures(QDockWidget.NoDockWidgetFeatures)
+        self.addDockWidget(Qt.BottomDockWidgetArea, self.lazi_dock_widget)
+
+        # Legacy floating overlay (hidden, kept for back-compat)
         self.lazi = LaziChatOverlay(self, brain=self.brain)
-        QTimer.singleShot(100, self._position_lazi)
+        self.lazi.hide()
 
     def _log(self, text: str):
         self.log_panel.append(text)
         sb = self.log_panel.verticalScrollBar()
         sb.setValue(sb.maximum())
-
-    def _position_lazi(self):
-        self.lazi.move(self.width() - self.lazi.width() - 16, self.height() - self.lazi.height() - 16)
-        self.lazi.show()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if self.lazi:
-            self._position_lazi()
 
     def start(self):
         """Run the bot_runner.run() in a background thread."""
@@ -763,6 +770,12 @@ def main():
     win = PersonaPicker()
     win.persona_chosen.connect(lambda name: open_run_config(name, win))
     win.show()
+    # First-run: show the WelcomeSplash on top of the picker for a few seconds
+    splash = WelcomeSplash(win)
+    splash.setGeometry(win.geometry())
+    splash.dismissed.connect(splash.deleteLater)
+    splash.show()
+    QTimer.singleShot(800, splash.raise_)
     sys.exit(app.exec())
 
 

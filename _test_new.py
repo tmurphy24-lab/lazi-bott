@@ -204,8 +204,10 @@ check("LaziBrain importable",     LaziBrain is not None)
 check("LaziChatOverlay importable", LaziChatOverlay is not None)
 check("TheCouch importable",      TheCouch is not None)
 check("EmbeddedBrowser importable", EmbeddedBrowser is not None)
-check("TheCouch WELCOME message mentions 'the Couch'",
-      "the Couch" in TheCouch.WELCOME or "Welcome to the Couch" in TheCouch.WELCOME)
+check("TheCouch WELCOME_TITLE mentions 'the Couch'",
+      "the Couch" in TheCouch.WELCOME_TITLE or "Welcome 2 the Couch" in TheCouch.WELCOME_TITLE)
+check("TheCouch WELCOME_BODY mentions Lazi",
+      "Lazi" in TheCouch.WELCOME_BODY)
 
 
 # === AC14: LLM import (openai already required, just check it loads) ===

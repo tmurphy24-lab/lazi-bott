@@ -120,7 +120,7 @@ check("PersonaPicker shows the empty-state hint on first run",
 
 couch = TheCouch()
 check("TheCouch persona_combo shows empty-state on first run",
-      couch.persona_combo.count() == 1 and "no personas" in couch.persona_combo.itemText(0))
+      couch.persona_combo.count() == 1 and "no personas" in couch.persona_combo.itemText(0).lower())
 
 
 # === AC35: delete_persona removes the directory ===
