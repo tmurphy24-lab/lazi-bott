@@ -1,5 +1,69 @@
 # Lazi-Bot — Master Plan
-**Status**: Draft | **Version**: 1.0 | **Updated**: 2026-08-30
+**Status**: Draft | **Version**: 1.1 | **Updated**: 2026-08-30
+
+---
+
+## 0. Architecture Realignment — What page-agent Changed
+
+> Found via https://github.com/alibaba/page-agent (Apache/MIT, 28.9k stars)
+
+### What page-agent Is
+
+A **JavaScript bookmarklet** that injects directly into any web page as a first-party script. No browser extension, no Python, no Selenium. It runs in the DOM, gives the page its own AI agent, and communicates via MCP.
+
+```
+Traditional (ours):   Python/Selenium → remote browser → anti-bot detects it
+page-agent way:       JS bookmarklet → injected into page → IS first party → invisible
+```
+
+### What We Learned and Are Adopting
+
+| page-agent Pattern | How We Adopt It |
+|---|---|
+| **MacroTool** — LLM returns `{ evaluation_previous_goal, memory, next_goal, action }` | LaziBrain Enhanced ReAct loop with explicit reflection step |
+| **EventTarget** — `statuschange`, `historychange`, `activity` | LaziBrain event bus (our existing `_events` dict → proper event system) |
+| **PageController** — async DOM extraction, no screenshots | `DOMExtractor` class — dehydrates page HTML → simplified text for LLM context |
+| **SimulatorMask** — visual overlay blocks user during automation | `AppController.show_mask()` / `hide_mask()` |
+| **MCP Server** — page-agent controllable from outside | LaziBrain MCP Bridge: Python side (FastMCP) ↔ Browser side (page-agent) |
+| **Tool executor with AbortSignal** — cancellable tool calls | `@tool` decorator with signal support |
+| **6-step ReAct** — observe → think → reflect → act → loop | LaziBrain loop gains explicit `reflect` and `plan` steps |
+
+### The 6th Engine: page-agent
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                     LinkedIn.com (or any job site)                   │
+│   page-agent.js injected as bookmarklet                              │
+│   ↕ communicates via MCP (STDIO or WebSocket)                      │
+└─────────────────────────────┬──────────────────────────────────────┘
+                              │
+                   LaziBrain MCP Bridge (Python)
+                              │
+                   LaziBrain ↔ tool registry ↔ 5 Python engines
+```
+
+**When to use page-agent instead of Python scrapers:**
+- LinkedIn blocks Selenium (captcha, anti-bot detection)
+- Job descriptions loaded via JS (React/Vue SPA)
+- Fast Apply forms that require real browser DOM interaction
+- Any dynamic page where Selenium gets blocked
+
+**When to keep using our Python scrapers:**
+- High-volume background scraping (no browser overhead)
+- API-backed sites (Indeed JSON feeds, RemoteOK)
+- Stable, predictable page structures
+
+### MCP Bridge Architecture
+
+```
+Browser (page-agent)                    Python (LaziBrain)
+──────────────────                    ─────────────────
+page-agent instance    ←── MCP ────→    FastMCP server
+DOM actions           ←── stdio ────→   LaziBrain tool calls
+                      (or WebSocket for dev)
+```
+
+MCP is the **wiring layer** between in-browser intelligence (page-agent) and our Python supervisor (LaziBrain). LaziBrain hosts an MCP server; page-agent is the MCP client. This is what makes Lazi-Bot fundamentally different from a simple bot launcher.
 
 ---
 
@@ -8,59 +72,88 @@
 > *"Lazi sits on your couch, watching all your job bots work. When one breaks, Lazi fix-es it. When a new job fires, Lazi routes it. When you need answers, Lazi knows. The vault holds everything. The hive mind learns."*
 
 Lazi-Bot is a **self-healing, hive-mind job application platform** — not just a GUI launcher, but an AI agent orchestrator that:
-1. Connects 5 LinkedIn bots as tools it can call
+1. Connects 5 LinkedIn bots + page-agent (Engine 6) as tools it can call
 2. Scrapes cross-platform (LinkedIn + Indeed + Glassdoor + RemoteOK)
-3. Learns from failures and self-heals
-4. Uses an encrypted vault as the single source of truth
-5. Tailors resumes per job using LLM
-6. Gives you a fridge-full of analytics
+3. Uses page-agent as anti-bot fallback for blocked sites
+4. Learns from failures and self-heals
+5. Uses an encrypted vault as the single source of truth
+6. Tailors resumes per job using LLM
+7. Gives you a fridge-full of analytics
 
 ---
 
 ## 1. System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Lazi-Bot GUI (PySide6)              │
-│  LaziDock │ TheCouch │ JobBoard │ Analytics │ Settings │
-└────────────┬──────────────────────────────────────────┘
-              │ LLM tool-calling
-              ▼
-┌─────────────────────────────────────────────────────────┐
-│            LaziBrain (Supervisor Agent)                  │
-│  • Decides which engine to call                       │
-│  • Routes failures → self-heal log                   │
-│  • Coordinates cross-platform scrape                    │
-│  • Tool registry: 5 engines + 12 helper tools      │
-└──────┬──────────┬──────────┬──────────┬────────────┘
-       │          │          │          │
+┌──────────────────────────────────────────────────────────────────┐
+│                      Lazi-Bot GUI (PySide6)                      │
+│  LaziDock │ TheCouch │ Job Jukebox │ Couch Frackbar │ Settings │
+└───────────────────────────┬────────────────────────────────────┘
+                            │ tool-calling / events
+                            ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                    LaziBrain (Supervisor Agent)                  │
+│  • Enhanced ReAct: observe → think → reflect → plan → act     │
+│  • Decides: Python scraper vs page-agent vs engine             │
+│  • Routes failures → self-heal pipeline                        │
+│  • MCP Bridge: controls page-agent in any browser tab           │
+│  • Tool registry: 5 engines + page-agent + 12 helper tools   │
+└──────┬──────────┬──────────┬──────────┬───────────┬────────────┘
+       │          │          │          │           │
    EasyApply  AIHawk  AutoJobApplier  LinkedInBot  JobApplyAgent
-       │          │          │          │
-       └──────────┴────┬─────┴──────────┘
-                        ▼
-┌─────────────────────────────────────────────────────────┐
-│              Cross-Platform Job Scraper                 │
-│  LinkedIn │ Indeed │ Glassdoor │ RemoteOK │ ZipRecruiter│
-└──────┬────────────┬─────────────┬──────────┬──────────┘
-       │            │             │          │
-       ▼            ▼             ▼          ▼
-┌─────────────────────────────────────────────────────────┐
-│              Lazi Vault (Source of Truth)               │
-│  credentials/   personas/   sessions/   learnings/    │
-│  (Fernet)     (YAML)       (JSON)      (.learnings/)  │
-└─────────────────────────────────────────────────────────┘
+       │          │          │          │           │
+       └──────────┴────┬─────┴──────────┘           │
+                        ▼                               │
+┌────────────────────────────────┐                     │
+│  Cross-Platform Scraper       │                     │
+│  LinkedIn│Indeed│Glassdoor│  │                     │
+│  RemoteOK│ZipRecruiter        │                     │
+└──────────────┬───────────────┘                     │
+               │                                     │
+┌──────────────▼───────────────┐   ┌────────────────▼──────────────────┐
+│  MCP Bridge (FastMCP)        │◄──│  Engine 6: page-agent (JS)       │
+│  Python ↔ browser            │   │  • Injected as bookmarklet         │
+└──────────────────────────────┘   │  • Runs AS first party → no anti-bot│
+                                   │  • LinkedIn / React SPAs / Fast Apps│
+                                   │  • Communicates via MCP STDIO       │
+                                   └──────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│                      Lazi Vault (Source of Truth)                │
+│  credentials/   personas/   sessions/   learnings/   jobs/     │
+│  (Fernet)     (YAML)       (JSON)      (.learnings/)  (bloom) │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 2. LaziBrain — Supervisor Agent (Tool Registry)
+## 2. LaziBrain — Supervisor Agent (Enhanced ReAct + Tool Registry)
 
-### 2.1 Tool Schema for Each Engine
+### 2.1 The Enhanced ReAct Loop (from page-agent)
 
-Each engine becomes a named tool Lazi can call:
+LaziBrain follows a 5-step loop per iteration — matching page-agent's architecture:
+
+```
+Step N:
+  1. OBSERVE   → gather browser/page state, push observations
+  2. THINK     → LLM generates: evaluation + memory + next_goal + action
+  3. REFLECT   → build reflection text from evaluation_previous_goal + memory
+  4. ACT       → execute the selected tool, emit activity events
+  5. LOOP      → max 10 iterations, then summarize partial results
+```
+
+Each step emits one of: `thinking | executing | executed | retrying | error`
+
+LaziBrain also emits:
+- `statuschange` — agent transitions: idle → running → completed/error/stopped
+- `historychange` — history events updated (persistent, agent memory)
+- `activity` — transient real-time feedback for UI only (NOT in LLM context)
+
+### 2.2 Tool Schema — All 6 Engines
 
 ```python
 TOOLS = [
+    # 5 Python engines (existing)
     {
         "name": "easyapplyjobsbot",
         "description": "Best for volume: applies to every job LinkedIn throws at you. "
@@ -113,7 +206,7 @@ TOOLS = [
             "properties": {
                 "search_query": {"type": "string"},
                 "locations": {"type": "array", "items": {"type": "string"}},
-                "base_url": {"type": "string"},  # LLM base URL override
+                "base_url": {"type": "string"},
             }
         }
     },
@@ -130,42 +223,134 @@ TOOLS = [
             "required": ["job_url"]
         }
     },
+    # Engine 6: page-agent (via MCP Bridge)
+    {
+        "name": "page_agent",
+        "description": "JavaScript in-page agent. Use when Selenium is blocked by anti-bot, "
+                       "for React SPAs, or Fast Apply forms requiring real DOM. "
+                       "Communicates via MCP to browser. Returns DOM-extracted content.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {"type": "string", "description": "Natural language instruction for the browser agent"},
+                "tab_url": {"type": "string", "description": "URL of the browser tab to target"},
+                "wait_for": {"type": "number", "description": "Seconds to wait after action (default 2)"},
+            },
+            "required": ["task"]
+        }
+    },
 ]
 ```
 
-### 2.2 Lazi's Internal ReAct Loop
+### 2.3 LaziBrain Implementation (Enhanced)
 
 ```python
 class LaziBrain:
     MAX_ITERATIONS = 10
+    EVENT_STATUS_CHANGE = "statuschange"
+    EVENT_HISTORY_CHANGE = "historychange"
+    EVENT_ACTIVITY = "activity"
 
-    def ask(self, task: str) -> str:
-        history = []
+    def __init__(self, llm, vault, mcp_bridge=None):
+        self.llm = llm
+        self.vault = vault
+        self.mcp_bridge = mcp_bridge  # FastMCP connection to page-agent
+        self.tools = build_tool_registry(TOOLS)
+        self.history = []
+        self._events = {}  # → replace with proper EventTarget later
 
-        for i in range(self.MAX_ITERATIONS):
-            # Lazi reasons
-            thought = self.llm.think(task, history, tools=TOOLS)
-            history.append({"role": "assistant", "content": thought})
+    def ask(self, task: str) -> ExecutionResult:
+        """Main ReAct loop — observe, think, reflect, act, loop."""
+        self._emit("statuschange", "running")
+        self.history = []
+        abort_controller = AbortController()
 
-            if thought.is_final:
-                return thought.answer
+        for step in range(self.MAX_ITERATIONS):
+            # 1. OBSERVE
+            observations = self._gather_observations(step)
+            for obs in observations:
+                self.history.append({"type": "observation", "content": obs})
 
-            # Lazi acts — calls a tool
-            action = self.llm.select_tool(thought, TOOLS)
-            history.append({"role": "assistant", "content": f"[TOOL CALL] {action.name}"})
+            # 2. THINK — LLM returns MacroToolInput
+            messages = self._build_messages(task)
+            result = self.llm.invoke(messages, self._macro_tool, abort_controller.signal)
 
+            macro_input = result.tool_result.input
+            reflection = {
+                "evaluation_previous_goal": macro_input.get("evaluation_previous_goal", ""),
+                "memory": macro_input.get("memory", ""),
+                "next_goal": macro_input.get("next_goal", ""),
+            }
+
+            # 3. REFLECT — log to history
+            self.history.append({
+                "type": "step", "step": step, "reflection": reflection,
+                "action": macro_input["action"], "usage": result.usage
+            })
+            self._emit("historychange")
+
+            # Check for done
+            action = macro_input["action"]
+            action_name = list(action.keys())[0]
+            if action_name == "done":
+                return ExecutionResult(success=True, data=action[action_name], history=self.history)
+
+            # 4. ACT — execute tool with AbortSignal
+            self._emit("activity", {"type": "executing", "tool": action_name})
             try:
-                result = self._execute_tool(action)
+                tool_result = self._execute_tool(action_name, action[action_name], abort_controller.signal)
             except Exception as e:
-                result = f"[ERROR] {e}"
-                self._log_failure(action.name, str(e))
+                tool_result = f"[ERROR] {e}"
+                self.vault.log_failure(action_name, str(e))
 
-            history.append({"role": "user", "content": f"[RESULT] {result}"})
+            self._emit("activity", {"type": "executed", "tool": action_name, "result": tool_result})
+            self.history.append({"type": "result", "tool": action_name, "result": tool_result})
 
-        return self._summarize_partial(history)
+        # Max iterations reached — summarize partial results
+        return ExecutionResult(success=False, data=self._summarize_partial(), history=self.history)
+
+    def _execute_tool(self, name: str, input_data: dict, signal: AbortSignal):
+        """Execute tool by name. page-agent goes through MCP bridge."""
+        if name == "page_agent":
+            return self.mcp_bridge.execute(input_data["task"], tab_url=input_data.get("tab_url"))
+        return self.tools[name].execute(input_data, {"signal": signal})
 ```
 
-### 2.3 Lazi Command Router
+### 2.4 MCP Bridge — LaziBrain ↔ page-agent
+
+```python
+class MCPBridge:
+    """FastMCP server that LaziBrain hosts. page-agent is the MCP client."""
+
+    def __init__(self, playwright_browser=None):
+        self.server = FastMCP("lazi-brain-mcp")
+        self._register_tools()
+        self.playwright_browser = playwright_browser  # for launching page-agent tabs
+
+    def _register_tools(self):
+        self.server.add_tool("navigate", self._navigate)
+        self.server.add_tool("extract_jobs", self._extract_jobs)
+        self.server.add_tool("click_apply", self._click_apply)
+        self.server.add_tool("fill_form", self._fill_form)
+        self.server.add_tool("get_page_html", self._get_page_html)
+
+    def start(self):
+        """Start the MCP server. LaziBrain calls this on boot."""
+        self.server.run()  # blocks — run on background thread
+
+    # --- Tools page-agent calls through MCP ---
+    def _navigate(self, url: str):
+        page = self.playwright_browser.new_page()
+        page.goto(url)
+        return {"success": True, "url": page.url}
+
+    def _extract_jobs(self, selector: str) -> list[dict]:
+        """Called by page-agent after it navigates to a job listing page."""
+        # page-agent has already extracted DOM; this tool lets it report structured data back
+        return []
+```
+
+### 2.5 Lazi Command Router
 
 ```python
 # Natural language → structured command
@@ -178,6 +363,8 @@ LAZI_COMMANDS = {
     r"why.*fail": "diagnose_failure",
     r"fix.*(.+)": "self_heal",
     r"scrape (.+)": "cross_platform_scrape",
+    r"use.*page.?agent": "page_agent_scrape",      # NEW: route to Engine 6
+    r"linkedin.*blocked": "page_agent_scrape",       # NEW: anti-bot fallback
     r"tailor.*resume": "tailor_for_job",
     r"cover letter for (.+)": "generate_cover_letter",
 }
@@ -187,7 +374,33 @@ LAZI_COMMANDS = {
 
 ## 3. Cross-Platform Job Scraper
 
-### 3.1 Unified Job Schema
+### 3.1 Scraper Decision Tree
+
+```
+Job scrape requested
+    │
+    ├── LinkedIn?
+    │       │
+    │       ├── Selenium works (no captcha)?
+    │       │    → Python scraper (scrapers/linkedin.py)
+    │       │
+    │       └── Anti-bot blocks Selenium?
+    │            → page-agent Engine 6 (MCP Bridge)
+    │
+    ├── Indeed?
+    │    → Python scraper (scrapers/indeed.py) — JSON feed
+    │
+    ├── Glassdoor?
+    │    → Python scraper (scrapers/glassdoor.py)
+    │
+    ├── RemoteOK?
+    │    → Python scraper (scrapers/remoteok.py) — JSON feed
+    │
+    └── Unknown / React SPA?
+       → page-agent Engine 6 (DOM injection)
+```
+
+### 3.2 Unified Job Schema
 
 ```python
 @dataclass
@@ -210,24 +423,25 @@ class UnifiedJob:
     hiring_fast: bool              # "Fast Response" badge
 
     employer_urgency: str          # "none" | "medium" | "high"
-    ats_type: Optional[str]       # "greenhouse" | "workday" | "lever" | None
+    ats_type: Optional[str]         # "greenhouse" | "workday" | "lever" | None
     level: str                     # "entry" | "mid" | "senior" | "lead" | "executive"
     department: Optional[str]
-   tags: List[str]
+    tags: List[str]
     raw_metadata: dict
 ```
 
-### 3.2 Scraper Adapters
+### 3.3 Scraper Adapters
 
 | Platform | Adapter | Status | Key Selectors |
 |---|---|---|---|
 | LinkedIn | `scrapers/linkedin.py` | existing (`app/scraper.py`) | `[data-occludable-job-id]`, `.base-card` |
-| Indeed | `scrapers/indeed.py` | **new** | `.jobsearch-JobTitle`, `.company_location` |
-| Glassdoor | `scrapers/glassdoor.py` | **new** | `.css-16l4uv7`, `.css-1rr4iq7` |
-| RemoteOK | `scrapers/remoteok.py` | **new** | `.jobs-board__job-link` |
-| ZipRecruiter | `scrapers/ziprecruiter.py` | **new** | `.job男士ob` |
+| LinkedIn (anti-bot) | `page_agent` (Engine 6) | **NEW** | DOM via page-agent MCP |
+| Indeed | `scrapers/indeed.py` | existing | `.jobsearch-JobTitle`, `.company_location` |
+| Glassdoor | `scrapers/glassdoor.py` | existing | `.css-16l4uv7`, `.css-1rr4iq7` |
+| RemoteOK | `scrapers/remoteok.py` | existing | `.jobs-board__job-link` |
+| ZipRecruiter | `scrapers/ziprecruiter.py` | **new** | `.job_search_result` |
 
-### 3.3 Deduplication
+### 3.4 Deduplication
 
 - Hash `normalized_title + normalized_company + location` → dedup across all sources
 - Store in vault: `vault/jobs/dedup_index.json` (bloom filter for speed)
@@ -447,6 +661,8 @@ LaziBrain decides: "Which engine should handle this?"
     ├── linkedin_aihawk  →  if cover_letter=True + tailor_resume=True
     ├── easyapplyjobsbot →  if volume mode + no cover needed
     ├── job_apply_ai_agent →  if strict filtering wanted
+    │   (anti-bot blocked?)
+    │    → page_agent Engine 6 via MCP Bridge
     │
     ▼
 Show modal:
@@ -497,7 +713,7 @@ LaziDock: "Applied chief! That's job #47 today. "
 │  🧲 Supply Chain  🧲 Logistics  🧲 Procurement             │
 │  🧲 Manager  🧲 Director  🧲 Operations                     │
 │                                                              │
-│  Engine leaderboard:                                        │
+│  Engine leaderboard:                                         │
 │  🥇 linkedin-aihawk: 23 apps (best cover letter)           │
 │  🥈 easyapplyjobsbot: 15 apps (fastest)                     │
 │  🥉 auto-job-applier: 9 apps                               │
@@ -543,12 +759,13 @@ LaziDock: "Applied chief! That's job #47 today. "
 | `_test_e2e_chain.py` | E2E | 44 | Full run chains |
 | `_test_password_browser.py` | Integration | 29 | Vault + browser |
 | `_test_10_features.py` | Feature | 60 | All 10 features |
-| `_test_self_heal.py` | **NEW** | 20 | SelfHealer + error log |
-| `_test_vault.py` | **NEW** | 25 | Vault encrypt/decrypt |
-| `_test_cross_platform.py` | **NEW** | 30 | Multi-scraper deduplication |
-| `_test_lazibrain.py` | **NEW** | 20 | LaziBrain tool calls |
-| `_test_reactions.py` | **NEW** | 15 | Job card reactions |
-| **`TOTAL`** | | **~457** | |
+| `_test_self_heal.py` | Unit | 20 | SelfHealer + error log |
+| `_test_vault.py` | Unit | 25 | Vault encrypt/decrypt |
+| `_test_cross_platform.py` | Unit | 30 | Multi-scraper deduplication |
+| `_test_lazibrain.py` | Unit | 20 | LaziBrain tool calls + ReAct |
+| `_test_page_agent.py` | **NEW** | 15 | MCP Bridge + page-agent routing |
+| `_test_reactions.py` | Unit | 15 | Job card reactions |
+| **`TOTAL`** | | **~482** | |
 
 ### 8.3 Review Gates
 
@@ -562,6 +779,7 @@ PR opened
     ├── ✅ E2E smoke test (CI)
     ├── ✅ Lazi self-heal test (CI)
     ├── ✅ Vault encryption test (CI)
+    ├── ✅ page-agent MCP bridge test (CI)
     ├── ✅ No new .learnings/UNRESOLVED entries
     ├── ✅ Branding/emoji check (manual, opt-in)
     └── ✅ 2 approvals required
@@ -575,7 +793,7 @@ PR opened
 
 1. **Foundation chunk** — structure, types, interfaces (low risk, high value)
 2. **UI chunk** — components, pages, widgets
-3. **Logic chunk** — LaziBrain, SelfHealer, vault
+3. **Logic chunk** — LaziBrain, SelfHealer, vault, MCP Bridge
 4. **Test chunk** — tests for the new code
 5. **Polish chunk** — emoji, branding, animations
 
@@ -585,23 +803,27 @@ Each chunk gets its own PR + review gate.
 
 ## 9. Migration Plan (v3 → v4)
 
-### Phase 1: Foundation (This Week)
-- [ ] Create `app/vault.py` — vault structure + Fernet encryption
-- [ ] Create `app/self_healer.py` — error log + LLM diagnosis
-- [ ] Create `app/scrapers/` directory with `base.py` + `linkedin.py` (move from `app/scraper.py`)
-- [ ] Add `app/lazibot.py` `_learn()` method — Lazi logs corrections to `vault/learnings/`
+### Phase 1: Foundation (COMPLETED)
+- [x] Create `app/vault.py` — vault structure + Fernet encryption
+- [x] Create `app/self_healer.py` — error log + LLM diagnosis
+- [x] Create `app/scrapers/` directory with `base.py` + `linkedin.py`
+- [x] Add `app/lazibot.py` `_learn()` method — Lazi logs corrections
 
-### Phase 2: Cross-Platform (Next Week)
+### Phase 2: Cross-Platform + page-agent (Next)
 - [ ] Implement `scrapers/indeed.py` adapter
 - [ ] Implement `scrapers/glassdoor.py` adapter
 - [ ] Implement job deduplication + `dedup_index.json` bloom filter
 - [ ] Update scraper API: `scrape_all(query, location) → List[UnifiedJob]`
+- [ ] **NEW**: Add `app/mcp_bridge.py` — FastMCP server in LaziBrain
+- [ ] **NEW**: Add `page_agent` as 6th engine in tool registry
+- [ ] **NEW**: `@tool` decorator with `AbortSignal` support
+- [ ] **NEW**: LaziBrain event bus — `statuschange`, `historychange`, `activity`
 
-### Phase 3: LaziBrain as Tool Caller
-- [ ] Refactor `LaziDock` to use tool-calling instead of plain text
-- [ ] Add tool registry for all 5 engines
-- [ ] Add `lazi_brain.ask_with_tools()` — ReAct loop
+### Phase 3: LaziBrain Enhanced ReAct
+- [ ] Refactor `LaziDock` to use enhanced ReAct with reflection steps
+- [ ] Add `lazi_brain.ask_with_tools()` — ReAct loop with MacroTool pattern
 - [ ] `SelfHealer.run()` called automatically after failed engine runs
+- [ ] page-agent routing: auto-detect anti-bot → switch to Engine 6
 
 ### Phase 4: Job Jukebox + Reactions
 - [ ] Create `app/job_board.py` — "The Job Jukebox" page
@@ -623,7 +845,7 @@ Each chunk gets its own PR + review gate.
 
 ### Phase 7: Testing + Review Gates
 - [ ] Add `_test_self_heal.py`, `_test_vault.py`, `_test_cross_platform.py`
-- [ ] Add `_test_lazibrain.py`, `_test_reactions.py`
+- [ ] Add `_test_lazibrain.py`, `_test_page_agent.py`, `_test_reactions.py`
 - [ ] Add GitHub Actions CI workflow with review gates
 - [ ] Add pre-commit hooks (lint, type-check, test)
 
@@ -652,7 +874,6 @@ Applied to every page as a subtle CSS backdrop:
     opacity: 0.04;
     pointer-events: none;
     animation: emoji-drift 60s linear infinite;
-    /* positioned behind all content */
     z-index: 0;
 }
 @keyframes emoji-drift {
@@ -684,48 +905,50 @@ linkedin-autopilot/
 │   ├── main.py                  # PySide6 scaffold
 │   ├── lazibot.py               # LaziBrain + LaziDock + TheCouch
 │   ├── ui_kit.py                # Design system (SPACING/TYPE/SHADOWS/LaziColors)
-│   ├── vault.py                 # NEW: Fernet vault + source-of-truth API
-│   ├── self_healer.py          # NEW: .learnings/ error → fix pipeline
-│   ├── job_board.py             # NEW: "The Job Jukebox"
-│   ├── job_tracker.py          # F1: job application tracking
+│   ├── vault.py                 # Fernet vault + source-of-truth API
+│   ├── self_healer.py           # .learnings/ error → fix pipeline
+│   ├── mcp_bridge.py            # NEW: FastMCP server — LaziBrain ↔ page-agent
+│   ├── job_board.py             # "The Job Jukebox"
+│   ├── job_tracker.py            # F1: job application tracking
 │   ├── scheduler.py             # F2: cron scheduler
-│   ├── analytics.py             # F3: → "Couch Frackbar" (F3)
+│   ├── analytics.py             # F3: → "Couch Frackbar"
 │   ├── ai_assist.py             # F4-F8: cover letter / interview / follow-up / salary / tailor
 │   ├── ux.py                    # F9-F10: dark mode + notifications
 │   ├── bot_runner.py            # Engine dispatcher
 │   ├── scraper.py               # LinkedIn scraper (→ move to scrapers/)
-│   ├── scrapers/                # NEW: cross-platform adapters
+│   ├── scrapers/
 │   │   ├── __init__.py
-│   │   ├── base.py             # UnifiedJob schema + deduplication
+│   │   ├── base.py              # UnifiedJob schema + deduplication + DOMExtractor
 │   │   ├── linkedin.py          # Existing scraper logic
-│   │   ├── indeed.py           # NEW
-│   │   ├── glassdoor.py        # NEW
-│   │   └── remoteok.py         # NEW
+│   │   ├── indeed.py            # DONE
+│   │   ├── glassdoor.py         # DONE
+│   │   └── remoteok.py          # DONE
 │   ├── resume_parser.py
 │   ├── auto_filler.py
 │   ├── profile_store.py
 │   └── password_store.py
-├── engines/                    # 5 engine copies (read-only)
+├── engines/                     # 5 engine copies (read-only)
 │   ├── easyapplyjobsbot/
 │   ├── linkedin_aihawk/
 │   ├── auto-job-applier/
-│   ├── linkedin-bot/           # 2 patches allowed
+│   ├── linkedin-bot/            # 2 patches allowed
 │   └── Job-apply-AI-agent/
-├── vault/                      # NEW: Source of truth (gitignored)
-│   ├── credentials/            # Fernet-encrypted
+├── vault/                       # Source of truth (gitignored)
+│   ├── credentials/             # Fernet-encrypted
 │   ├── personas/
-│   ├── learnings/             # .learnings/ (errors.jsonl, corrections.jsonl, fixes_applied.jsonl)
+│   ├── learnings/              # errors.jsonl, corrections.jsonl, fixes_applied.jsonl
 │   └── jobs/
-├── personas/                   # Per-persona configs
+├── personas/                    # Per-persona configs
 ├── .learnings/                 # Self-improvement log (gitignored)
 │   ├── LEARNINGS.md
 │   ├── ERRORS.md
 │   └── FEATURE_REQUESTS.md
-├── tests/                      # NEW: consolidated test directory
+├── tests/
 │   ├── test_vault.py
 │   ├── test_self_healer.py
 │   ├── test_cross_platform.py
 │   ├── test_lazibrain.py
+│   ├── test_page_agent.py      # NEW: MCP Bridge + page-agent routing
 │   └── test_reactions.py
 ├── run.bat
 ├── requirements.txt
@@ -740,8 +963,9 @@ linkedin-autopilot/
 | Metric | Target | How Measured |
 |---|---|---|
 | Self-heal rate | >60% of errors auto-fixed | `vault/learnings/fixes_applied.jsonl` count |
-| Cross-platform coverage | 4 job sources | Number of scraper adapters implemented |
+| Cross-platform coverage | 4 job sources + page-agent | Number of scraper adapters + Engine 6 |
 | Vault coverage | 100% of credentials in vault | Audit check |
+| page-agent MCP integration | LaziBrain controls browser agent | `_test_page_agent.py` |
 | Test coverage | >80% of new code | pytest --cov |
 | Review gate pass rate | >90% first try | CI green builds |
 | E2E test count | ≥5 critical flows | `_test_e2e_chain.py` |
@@ -754,7 +978,9 @@ linkedin-autopilot/
 2. **Screen recording** — DOM event logging chosen; implementation pending.
 3. **RemoteOK/Glassdoor API** — may require reverse-engineering; check ToS first.
 4. **LaziBrain model** — poolside vs openai vs google? User to confirm.
+5. **page-agent MCP transport** — STDIO (local dev) vs WebSocket (production)? User preference.
+6. **FastMCP vs SSE** — FastMCP is newer; confirm compatibility with page-agent's MCP client version.
 
 ---
 
-*Plan status: Draft — awaiting user review and approval of Phase 1 scope.*
+*Plan status: Draft v1.1 — Section 0 (architecture realignment) added based on alibaba/page-agent research. Phase 1 complete. Phase 2 now includes page-agent + MCP Bridge as new scope.*
