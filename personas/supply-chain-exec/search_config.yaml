@@ -1,0 +1,22 @@
+titles:
+- Director of Supply Chain
+location: United States
+salary_min: 150000
+salary_max: 300000
+experience_years_min: 10
+experience_years_max: 25
+experience_levels: []
+job_types:
+- Full-time
+date_posted: Past Week
+remote: true
+hybrid: true
+onsite: true
+blacklist_companies:
+- Crossover
+- Jobot
+blacklist_titles:
+- Junior
+- Intern
+apply_once_at_company: true
+max_applications: 50

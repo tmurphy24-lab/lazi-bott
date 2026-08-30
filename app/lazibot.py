@@ -1310,7 +1310,10 @@ class TheCouch(QWidget):
         # Tab 10: Passwords
         self.passwords = PasswordVaultWidget()
         self.tabs.addTab(self.passwords, "🔒  Passwords")
-        # Tab 11: Settings (F9 + F10)
+        # Tab 11: Hive Mind Learnings — vault corrections, error log, applied fixes
+        self.learnings_page = LearningsPage()
+        self.tabs.addTab(self.learnings_page, "🧠  Hive Mind")
+        # Tab 12: Settings (F9 + F10)
         self.settings_page = SettingsPage(theme=ThemeManager(), notifier=Notifier())
         self.tabs.addTab(self.settings_page, "⚙  Settings")
 
@@ -1545,6 +1548,141 @@ class PasswordVaultWidget(QWidget):
 
     def _toggle_visibility(self, checked: bool):
         self.pass_edit.setEchoMode(QLineEdit.Normal if checked else QLineEdit.Password)
+
+
+# === Learnings / Hive Mind tab — shows vault corrections, errors, and fix log ===
+
+class LearningsPage(QWidget):
+    """
+    Displays Lazi's hive-mind memory: recent corrections, error log,
+    and applied fixes. Users can manually resolve errors and see what
+    Lazi has learned across sessions.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._build_ui()
+        self.refresh()
+
+    def _build_ui(self):
+        from app.ui_kit import Card, SPACING, LaziColors, SectionHeader, EmptyState
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(*[SPACING["md"]] * 4)
+
+        # Header with stats
+        self._stats_label = QLabel("")
+        self._stats_label.setStyleSheet(
+            f"color: {LaziColors.COUCH_TEXT}; font-size: 13px; font-weight: bold;"
+        )
+        outer.addWidget(self._stats_label)
+
+        # Tab: Corrections | Errors | Fixes
+        self._tabs = QTabWidget()
+        self._tabs.setStyleSheet(
+            "QTabBar::tab { padding: 6px 14px; font-size: 12px; }"
+            f"QTabBar::tab:selected {{ background: {LaziColors.COUCH_ACCENT}; color: white; }}"
+        )
+
+        self._corrections_list = QTextEdit()
+        self._corrections_list.setReadOnly(True)
+        self._corrections_list.setStyleSheet(
+            f"background: {LaziColors.COUCH_BG}; color: {LaziColors.COUCH_TEXT};"
+            "font-family: 'Segoe UI', monospace; font-size: 12px; border: none;"
+        )
+        self._tabs.addTab(self._corrections_list, "Corrections")
+
+        self._errors_list = QTextEdit()
+        self._errors_list.setReadOnly(True)
+        self._errors_list.setStyleSheet(
+            f"background: {LaziColors.COUCH_BG}; color: {LaziColors.COUCH_TEXT};"
+            "font-family: 'Segoe UI', monospace; font-size: 12px; border: none;"
+        )
+        self._tabs.addTab(self._errors_list, "Error Log")
+
+        self._fixes_list = QTextEdit()
+        self._fixes_list.setReadOnly(True)
+        self._fixes_list.setStyleSheet(
+            f"background: {LaziColors.COUCH_BG}; color: {LaziColors.COUCH_TEXT};"
+            "font-family: 'Segoe UI', monospace; font-size: 12px; border: none;"
+        )
+        self._tabs.addTab(self._fixes_list, "Applied Fixes")
+
+        outer.addWidget(self._tabs, stretch=1)
+
+        # Refresh button
+        btn_row = QHBoxLayout()
+        refresh_btn = QPushButton("Refresh")
+        refresh_btn.clicked.connect(self.refresh)
+        btn_row.addWidget(refresh_btn)
+        btn_row.addStretch()
+
+        # Vault status
+        self._vault_status = QLabel("Vault: loading…")
+        self._vault_status.setStyleSheet("color: #888; font-size: 12px;")
+        btn_row.addWidget(self._vault_status)
+        outer.addLayout(btn_row)
+
+    def refresh(self):
+        from app import lazi_integration
+
+        # Vault status
+        vault = lazi_integration.get_vault()
+        if vault is None:
+            self._vault_status.setText("Vault: not ready (booting or unavailable)")
+            self._stats_label.setText("Hive Mind: waiting for vault…")
+            return
+
+        self._vault_status.setText("Vault: active")
+
+        # Stats
+        stats = lazi_integration.get_vault_stats()
+        healer = stats.get("healer", {})
+        total = healer.get("total", 0)
+        resolved = healer.get("resolved", 0)
+        fix_rate = healer.get("fix_rate", 0.0)
+        self._stats_label.setText(
+            f"Hive Mind — Total errors: {total} | Resolved: {resolved} | Fix rate: {fix_rate:.0%}"
+        )
+
+        # Corrections
+        corrections = lazi_integration.get_recent_corrections(limit=20)
+        if corrections:
+            lines = [f"[{c.get('timestamp', '?')}'] {c.get('type', '?')} — {c.get('user_message', '')[:80]}"
+                     for c in reversed(corrections)]
+            self._corrections_list.setPlainText("\n".join(lines))
+        else:
+            self._corrections_list.setPlainText("(no corrections yet — Lazi is still learning)")
+
+        # Errors
+        errors = lazi_integration.get_recent_errors(limit=20)
+        if errors:
+            lines = []
+            for e in reversed(errors):
+                status_icon = "✅" if e.get("success") else "⏳" if e.get("status") == "pending" else "⚠️"
+                lines.append(
+                    f"{status_icon} [{e.get('created_at', '?')[:10]}] "
+                    f"{e.get('error_type', '?')} in {e.get('function_name', '?')} — "
+                    f"sev={e.get('severity', '?')} | {e.get('diagnosis', '')[:60]}"
+                )
+            self._errors_list.setPlainText("\n".join(lines))
+        else:
+            self._errors_list.setPlainText("(no errors logged — Lazi is healthy)")
+
+        # Applied fixes
+        try:
+            fix_log = vault.get_recent_corrections(limit=20)
+            if fix_log:
+                lines = [f"[{f.get('timestamp', '?')}] {f.get('function', '?')} — {f.get('diagnosis', '')[:70]}"
+                         for f in reversed(fix_log)]
+                self._fixes_list.setPlainText("\n".join(lines))
+            else:
+                self._fixes_list.setPlainText("(no fixes applied yet)")
+        except Exception:
+            self._fixes_list.setPlainText("(vault not ready)")
+
+
+# === Legacy EmbeddedBrowser stub (kept for back-compat imports) ===
 
 
 # === Legacy EmbeddedBrowser stub (kept for back-compat imports) ===

@@ -41,6 +41,7 @@ from app.bot_runner import ENGINES, run, RunResult
 from app.resume_parser import profile_from_resume
 from app.auto_filler import answer_form
 from app.lazibot import LaziBrain, LaziChatOverlay, LaziDock, TheCouch, WelcomeSplash
+from app import lazi_integration
 from app.browser_widget import BrowserWidget
 from app.ui_kit import (
     LaziColors, apply_app_theme, ToastManager, Toast, Card, SectionHeader,
@@ -79,6 +80,8 @@ class AppController(QObject):
         self._windows: List[QMainWindow] = []
         # apply initial theme
         apply_app_theme(app, self.theme_name)
+        # Boot vault + self-healer in background (non-blocking, 8s timeout)
+        lazi_integration.setup_lazi_integration(self)
 
     def track_window(self, w: QMainWindow) -> None:
         self._windows.append(w)

@@ -1,0 +1,73 @@
+personal_info:
+  first_name: Trevor
+  last_name: Murphy
+  email: tmurphy24@email.davenport.edu
+  phone: (813) 555-0142
+  linkedin_url: https://linkedin.com/in/trevor-murphy-supply
+  city: ''
+  state: ''
+  country: United States
+resume_path: C:\Users\trevo\Desktop\.agents\linkedin-autopilot\sample_resume.txt
+skills:
+- Bachelors
+- Contract Negotiation
+- Distribution
+- ERP
+- Forecasting
+- Inventory
+- Kaizen
+- Leadership
+- Lean
+- Logistics
+- MBA
+- Manufacturing
+- Negotiation
+- NetSuite
+- Operations
+- Oracle
+- PMP
+- Planning
+- Procurement
+- Project Management
+- S&OP
+- SAP
+- Six Sigma
+- Sourcing
+- Strategy
+- Supplier
+- Supply Chain
+- Vendor Management
+- WMS
+experience:
+- title: spanning Army logistics (2008-2016) and corporate operations leadership.
+  company: ''
+  start: '20'
+  end: '20'
+  summary: spanning Army logistics (2008-2016) and corporate operations leadership.
+- title: Director of Supply Chain  |  Acme Manufacturing  |  2020 - Present
+  company: ''
+  start: '20'
+  end: Present
+  summary: Director of Supply Chain  |  Acme Manufacturing  |  2020 - Present
+- title: Senior Supply Chain Manager  |  Beta Logistics  |  2016 - 2020
+  company: ''
+  start: '20'
+  end: '20'
+  summary: Senior Supply Chain Manager  |  Beta Logistics  |  2016 - 2020
+- title: Army Logistics Officer  |  US Army  |  2008 - 2016
+  company: ''
+  start: '20'
+  end: '20'
+  summary: Army Logistics Officer  |  US Army  |  2008 - 2016
+education:
+- degree: MBA
+  school: Bachelors in Business Administration, MBA in progress. PMP certified.
+  year: ''
+- degree: MBA
+  school: MBA, University of Tampa  2022
+  year: '20'
+- degree: Bachelor
+  school: Bachelors, Davenport University  2014
+  year: '20'
+blacklist_companies: []
+blacklist_titles: []

@@ -87,8 +87,8 @@ print("\nAC19: TheCouch has 3 tabs (Welcome / Browser / Passwords)")
 from app.lazibot import TheCouch, PasswordVaultWidget
 c = TheCouch()
 check("TheCouch has a QTabWidget", c.tabs is not None)
-check("TheCouch has 11 tabs (Welcome, Walkthroughs, Profile, Game Selection, Tracker, Analytics, Schedule, AI Assist, Browser, Passwords, Settings)",
-      c.tabs.count() == 11, f"got {c.tabs.count()}")
+check("TheCouch has 12 tabs (Welcome..Settings + Hive Mind)",
+      c.tabs.count() == 12, f"got {c.tabs.count()}")
 check("TheCouch has Welcome tab (0)",      c.tabs.tabText(0).startswith("☕"))
 check("TheCouch has Walkthroughs tab (1)",  c.tabs.tabText(1).startswith("📖"))
 check("TheCouch has Profile tab (2)",       c.tabs.tabText(2).startswith("👤"))
@@ -99,7 +99,8 @@ check("TheCouch has Schedule tab (6)",     c.tabs.tabText(6).startswith("⏰"))
 check("TheCouch has AI Assist tab (7)",    c.tabs.tabText(7).startswith("🤖"))
 check("TheCouch has Browser tab (8)",       c.tabs.tabText(8).startswith("🌐"))
 check("TheCouch has Passwords tab (9)",     c.tabs.tabText(9).startswith("🔒"))
-check("TheCouch has Settings tab (10)",    c.tabs.tabText(10).startswith("⚙"))
+check("TheCouch has Hive Mind tab (10)",    c.tabs.tabText(10).startswith("🧠"))
+check("TheCouch has Settings tab (11)",     c.tabs.tabText(11).startswith("⚙"))
 check("TheCouch has BrowserWidget on tab 8", c.browser is not None)
 check("TheCouch has PasswordVaultWidget on tab 9", c.passwords is not None)
 
@@ -112,8 +113,8 @@ from app.lazibot import LaziBrain
 controller = AppController(app)
 brain = LaziBrain()
 p = PersonaPicker(controller, brain)
-check("PersonaPicker has 11-tab Couch",
-      p.couch.tabs.count() == 11,
+check("PersonaPicker has 12-tab Couch (Hive Mind added)",
+      p.couch.tabs.count() == 12,
       f"got {p.couch.tabs.count()}")
 
 
