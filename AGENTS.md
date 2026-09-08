@@ -2,39 +2,13 @@
 
 > This file is for AI agents. Humans: see `README.md`.
 
-## Stack
+Python 3.11+ desktop app: PySide6 GUI over an openai-compatible LLM client, dispatching six job-application engines.
 
-- **Runtime**: Python 3.11+, PySide6 GUI, openai-compatible LLM client
-- **Repo root**: `C:\Users\trevo\Desktop\.agents\linkedin-autopilot`
-- **Engines live here**: `engines/<name>/` (MIT-licensed copies, read-only)
-- **Engine adapters live here**: `app/engines/` (wraps each engine for the dispatcher)
+Repo root: `C:\Users\trevo\Desktop\.agents\linkedin-autopilot`. Engines live in `engines/<name>/` as MIT-licensed read-only copies; their adapters live in `app/engines/`.
 
-## Engine Registry (Phase 2 — 6 engines)
+`CLAUDE.md` is a one-line pointer at this file, so Claude Code reads everything below through the import.
 
-| # | Name | Adapter | Notes |
-|---|---|---|---|
-| 1 | `easyapplyjobsbot` | `app/engines/easyapplyjobsbot_adapter.py` | Volume, no cover letter |
-| 2 | `linkedin_aihawk` | `app/engines/linkedin_aihawk_adapter.py` | AI-powered, needs Chrome |
-| 3 | `auto_job_applier` | `app/engines/auto_job_applier_adapter.py` | Custom prompts |
-| 4 | `linkedin_bot` | `app/engines/linkedin_bot_adapter.py` | Patch: env `OPENAI_API_BASE_URL` |
-| 5 | `job_apply_ai_agent` | `app/engines/job_apply_ai_agent_adapter.py` | Batch processing |
-| 6 | `page_agent` | `app/mcp_bridge.py` — `MCPBridge` | Alibaba JS bookmarklet, MCP stdio |
-
-## Phase 2 Architecture
-
-```
-LaziBrain (QObject)
-├── LaziBrainCore (enhanced ReAct loop)
-│   ├── observe → think → reflect → act → loop (max 10 iterations)
-│   ├── event bus: status_changed / history_changed / activity_changed (Qt signals)
-│   └── _AbortController for cancellation
-├── MCPBridge (stub mode default)
-│   ├── MCPServer: hosts tools for page-agent to call
-│   └── page-agent: JS-injected browser agent, communicates via MCP over stdio
-└── ToolRegistry (@register_tool decorator, 6 engines + built-in helpers)
-```
-
-## Key Files
+## Project map
 
 | File | Purpose |
 |---|---|
@@ -48,43 +22,54 @@ LaziBrain (QObject)
 | `app/vault.py` | Encrypted local memory |
 | `app/self_healer.py` | LLM-powered self-diagnosis + fix broadcasting |
 
-## Tool Registration
+<important if="you are about to use git, delete a file, or touch anything under engines/">
+1. **NO worktrees.** Work on the main checkout only.
+2. **Squash merge** when there are more than 3 commits. Conventional commits: `feat(svc):`, `fix(svc):`, `refactor(svc):`.
+3. **The original bots in `C:\Users\trevo\Desktop\.agents/` are untouched.** All copies live in `engines/`.
+4. **Delete via `recycle.ps1`.** No `Remove-Item`, the Recycle Bin guard is intentional.
+</important>
 
-Tools are registered at import time via `@register_tool`:
+<important if="you are adding or modifying an engine, tool, or adapter">
 
-```python
-from app.tool_decorator import register_tool
+Six engines are registered:
 
-@register_tool(
-    name="my_engine",
-    description="What it does",
-    input_schema={"type": "object", "properties": {...}},
-)
-def my_engine(query: str, location: str, max_jobs: int = 50, signal=None):
-    signal.raise_if_aborted()  # check at checkpoints
-    return {"content": [{"type": "text", "text": "result"}]}
+| # | Name | Adapter | Notes |
+|---|---|---|---|
+| 1 | `easyapplyjobsbot` | `app/engines/easyapplyjobsbot_adapter.py` | Volume, no cover letter |
+| 2 | `linkedin_aihawk` | `app/engines/linkedin_aihawk_adapter.py` | AI-powered, needs Chrome |
+| 3 | `auto_job_applier` | `app/engines/auto_job_applier_adapter.py` | Custom prompts |
+| 4 | `linkedin_bot` | `app/engines/linkedin_bot_adapter.py` | Patch: env `OPENAI_API_BASE_URL` |
+| 5 | `job_apply_ai_agent` | `app/engines/job_apply_ai_agent_adapter.py` | Batch processing |
+| 6 | `page_agent` | `app/mcp_bridge.py` — `MCPBridge` | Alibaba JS bookmarklet, MCP stdio |
+
+Tools register at import time through `@register_tool` from `app/tool_decorator.py`. A tool takes the query/location/max_jobs shape, calls `signal.raise_if_aborted()` at checkpoints, and returns `{"content": [{"type": "text", "text": ...}]}`. See any existing adapter in `app/engines/` for the pattern.
+</important>
+
+<important if="you are debugging startup, singletons, or the control flow between the loop and the bridge">
+
+```
+LaziBrain (QObject)
+├── LaziBrainCore (enhanced ReAct loop)
+│   ├── observe → think → reflect → act → loop (max 10 iterations)
+│   ├── event bus: status_changed / history_changed / activity_changed (Qt signals)
+│   └── _AbortController for cancellation
+├── MCPBridge (stub mode default)
+│   ├── MCPServer: hosts tools for page-agent to call
+│   └── page-agent: JS-injected browser agent, over MCP stdio
+└── ToolRegistry (@register_tool decorator, 6 engines + built-in helpers)
 ```
 
-## Hard Rules
-
-1. **NO worktrees** — work on main checkout only
-2. **Squash merge** when > 3 commits — conventional commits: `feat(svc):`, `fix(svc):`, `refactor(svc):`
-3. **Original bots in `C:\Users\trevo\Desktop\.agents/` are untouched** — all copies live in `engines/`
-4. **Delete via `recycle.ps1`** — no `Remove-Item`; the Recycle Bin guard is intentional
-
-## Boot Sequence
-
+Boot order:
 ```
 AppController.__init__
   └─ setup_lazi_integration(controller)
        ├─ _boot_mcp_bridge()     → MCPBridge (synchronous, fast)
        └─ _background_boot()     → Vault + SelfHealer + HiveMindFixBroadcaster (async)
 ```
+After boot, `lazi_integration.get_vault()` and `lazi_integration.get_mcp_bridge()` reach the singletons from anywhere.
+</important>
 
-After boot, call `lazi_integration.get_vault()` and `lazi_integration.get_mcp_bridge()`
-from anywhere to access singletons.
-
-## Provider Config
+<important if="you are configuring an LLM provider or authentication">
 
 | Provider | Env var |
 |---|---|
@@ -93,13 +78,17 @@ from anywhere to access singletons.
 | Google | `GOOGLE_API_KEY` |
 | None | form-only mode, no key needed |
 
-## Google SSO
+Google OAuth client is **not yet implemented**, see `PLAN.md` Decision 5. It currently falls through to the Chrome session cookie only.
+</important>
 
-Google OAuth client **not yet implemented** — see `PLAN.md` Decision 5. Currently
-falls through to Chrome session cookie only.
+<important if="you are handling a Dependabot alert or a vulnerability in a vendored engine">
+Tracked by `.github/dependabot.yml` on a weekly schedule. Fix by running `npm audit fix` or `pip-audit` in the relevant `engines/<name>/` directory and committing the lockfile updates.
+</important>
 
-## Dependabot
+<important if="you are filing an issue, triaging, or writing domain docs for this repo">
+Config for Matt Pocock's engineering skills (`/grill-me`, `/tdd`, `/triage`, `/to-spec`, `/to-tickets`, `/wayfinder`, and the rest). The skills are installed once at user level and shared by every agent; only the files below are per-repo.
 
-Vulnerabilities in vendored engine submodules are tracked by `.github/dependabot.yml`
-(weekly schedule). Fix by running `npm audit fix` or `pip-audit` in the relevant
-`engines/<name>/` directory and committing the lockfile updates.
+- **Issue tracker:** GitHub Issues on `tmurphy24-lab/lazi-bott` via the `gh` CLI. Upstream engine bugs are not this repo's backlog. See `docs/agents/issue-tracker.md`.
+- **Triage labels:** the five canonical roles, used verbatim as label strings; all five exist on the repo. See `docs/agents/triage-labels.md`.
+- **Domain docs:** single-context, one `CONTEXT.md` plus `docs/adr/` at the repo root. `engines/` is vendored code, not a context. See `docs/agents/domain.md`.
+</important>
